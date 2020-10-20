@@ -16,8 +16,12 @@
 
 #include "cppbor.h"
 
-#define LOG_TAG "CppBor"
-#include <android-base/logging.h>
+#ifndef __TRUSTY__
+    #include <android-base/logging.h>
+    #define LOG_TAG "CppBor"
+#else
+    #define CHECK(x) (void)(x)
+#endif
 
 namespace cppbor {
 
@@ -129,7 +133,7 @@ bool Item::operator==(const Item& other) const& {
 }
 
 Nint::Nint(int64_t v) : mValue(v) {
-    CHECK(v < 0) << "Only negative values allowed";
+    CHECK(v < 0);
 }
 
 bool Simple::operator==(const Simple& other) const& {
