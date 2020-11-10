@@ -18,7 +18,7 @@ LOCAL_DIR := $(GET_LOCAL_DIR)
 
 MODULE := $(LOCAL_DIR)
 
-MODULE_CPPFLAGS := -std=c++17 -frtti
+MODULE_CPPFLAGS := -std=c++17
 
 MODULE_SRCS := \
 	$(LOCAL_DIR)/src/cppbor.cpp \
