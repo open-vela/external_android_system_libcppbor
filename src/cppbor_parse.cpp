@@ -280,7 +280,9 @@ class FullParseClient : public ParseClient {
             // Starting a new compound data item, i.e. a new parent.  Save it on the parent stack.
             // It's safe to save a raw pointer because the unique_ptr is guaranteed to stay in
             // existence until the corresponding itemEnd() call.
-            assert(dynamic_cast<CompoundItem*>(item.get()));
+            #if __has_feature(cxx_rtti)
+                assert(dynamic_cast<CompoundItem*>(item.get()));
+            #endif
             mParentStack.push(static_cast<CompoundItem*>(item.get()));
             return this;
         } else {
@@ -319,7 +321,9 @@ class FullParseClient : public ParseClient {
   private:
     void appendToLastParent(std::unique_ptr<Item> item) {
         auto parent = mParentStack.top();
-        assert(dynamic_cast<IncompleteItem*>(parent));
+        #if __has_feature(cxx_rtti)
+            assert(dynamic_cast<IncompleteItem*>(parent));
+        #endif
         if (parent->type() == ARRAY) {
             static_cast<IncompleteArray*>(parent)->add(std::move(item));
         } else if (parent->type() == MAP) {
