@@ -31,7 +31,7 @@ using ParseResult = std::tuple<std::unique_ptr<Item> /* result */, const uint8_t
  * successfully-parsed item and the error message string is empty.  If parsing fails, the Item
  * pointer is null, the buffer pointer points to the first byte that was unparseable (the first byte
  * of a data item header that is malformed in some way, e.g. an invalid value, or a length that is
- * too large for the remining buffer, etc.) and the string contains an error message describing the
+ * too large for the remaining buffer, etc.) and the string contains an error message describing the
  * problem encountered.
  */
 ParseResult parse(const uint8_t* begin, const uint8_t* end);
@@ -44,7 +44,7 @@ ParseResult parse(const uint8_t* begin, const uint8_t* end);
  * successfully-parsed item and the error message string is empty.  If parsing fails, the Item
  * pointer is null, the buffer pointer points to the first byte that was unparseable (the first byte
  * of a data item header that is malformed in some way, e.g. an invalid value, or a length that is
- * too large for the remining buffer, etc.) and the string contains an error message describing the
+ * too large for the remaining buffer, etc.) and the string contains an error message describing the
  * problem encountered.
  */
 inline ParseResult parse(const std::vector<uint8_t>& encoding) {
@@ -59,11 +59,28 @@ inline ParseResult parse(const std::vector<uint8_t>& encoding) {
  * successfully-parsed item and the error message string is empty.  If parsing fails, the Item
  * pointer is null, the buffer pointer points to the first byte that was unparseable (the first byte
  * of a data item header that is malformed in some way, e.g. an invalid value, or a length that is
- * too large for the remining buffer, etc.) and the string contains an error message describing the
+ * too large for the remaining buffer, etc.) and the string contains an error message describing the
  * problem encountered.
  */
 inline ParseResult parse(const uint8_t* begin, size_t size) {
     return parse(begin, begin + size);
+}
+
+/**
+ * Parse the first CBOR data item (possibly compound) from the value contained in a Bstr.
+ *
+ * Returns a tuple of Item pointer, buffer pointer and error message.  If parsing is successful, the
+ * Item pointer is non-null, the buffer pointer points to the first byte after the
+ * successfully-parsed item and the error message string is empty.  If parsing fails, the Item
+ * pointer is null, the buffer pointer points to the first byte that was unparseable (the first byte
+ * of a data item header that is malformed in some way, e.g. an invalid value, or a length that is
+ * too large for the remaining buffer, etc.) and the string contains an error message describing the
+ * problem encountered.
+ */
+inline ParseResult parse(const Bstr* bstr) {
+    if (!bstr)
+        return ParseResult(nullptr, nullptr, "Null Bstr pointer");
+    return parse(bstr->value());
 }
 
 class ParseClient;

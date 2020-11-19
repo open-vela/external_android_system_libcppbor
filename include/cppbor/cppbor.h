@@ -64,6 +64,7 @@ class Array;
 class Map;
 class Null;
 class Semantic;
+class EncodedItem;
 
 /**
  * Returns the size of a CBOR header that contains the additional info value addlInfo.
@@ -196,6 +197,37 @@ class Item {
 };
 
 /**
+ * EncodedItem represents a bit of already-encoded CBOR. Caveat emptor: It does no checking to
+ * ensure that the provided data is a valid encoding, cannot be meaninfully-compared with other
+ * kinds of items and you cannot use the as*() methods to find out what's inside it.
+ */
+class EncodedItem : public Item {
+  public:
+    explicit EncodedItem(std::vector<uint8_t> value) : mValue(std::move(value)) {}
+
+    bool operator==(const EncodedItem& other) const& { return mValue == other.mValue; }
+
+    // Type can't be meaningfully-obtained. We could extract the type from the first byte and return
+    // it, but you can't do any of the normal things with an EncodedItem so there's no point.
+    MajorType type() const override {
+        assert(false);
+        return static_cast<MajorType>(-1);
+    }
+    size_t encodedSize() const override { return mValue.size(); }
+    uint8_t* encode(uint8_t* pos, const uint8_t* end) const override {
+        if (end - pos < static_cast<ssize_t>(mValue.size())) return nullptr;
+        return std::copy(mValue.begin(), mValue.end(), pos);
+    }
+    void encode(EncodeCallback encodeCallback) const override {
+        std::for_each(mValue.begin(), mValue.end(), encodeCallback);
+    }
+    std::unique_ptr<Item> clone() const override { return std::make_unique<EncodedItem>(mValue); }
+
+  private:
+    std::vector<uint8_t> mValue;
+};
+
+/**
  * Int is an abstraction that allows Uint and Nint objects to be manipulated without caring about
  * the sign.
  */
@@ -235,7 +267,7 @@ class Uint : public Int {
         encodeHeader(mValue, encodeCallback);
     }
 
-    virtual std::unique_ptr<Item> clone() const override { return std::make_unique<Uint>(mValue); }
+    std::unique_ptr<Item> clone() const override { return std::make_unique<Uint>(mValue); }
 
   private:
     uint64_t mValue;
@@ -271,7 +303,7 @@ class Nint : public Int {
         encodeHeader(addlInfo(), encodeCallback);
     }
 
-    virtual std::unique_ptr<Item> clone() const override { return std::make_unique<Nint>(mValue); }
+    std::unique_ptr<Item> clone() const override { return std::make_unique<Nint>(mValue); }
 
   private:
     uint64_t addlInfo() const { return -1ll - mValue; }
@@ -285,6 +317,9 @@ class Nint : public Int {
 class Bstr : public Item {
   public:
     static constexpr MajorType kMajorType = BSTR;
+
+    // Construct an empty Bstr
+    explicit Bstr() {}
 
     // Construct from a vector
     explicit Bstr(std::vector<uint8_t> v) : mValue(std::move(v)) {}
@@ -323,8 +358,9 @@ class Bstr : public Item {
     }
 
     const std::vector<uint8_t>& value() const { return mValue; }
+    std::vector<uint8_t>&& moveValue() { return std::move(mValue); }
 
-    virtual std::unique_ptr<Item> clone() const override { return std::make_unique<Bstr>(mValue); }
+    std::unique_ptr<Item> clone() const override { return std::make_unique<Bstr>(mValue); }
 
   private:
     void encodeValue(EncodeCallback encodeCallback) const;
@@ -333,7 +369,7 @@ class Bstr : public Item {
 };
 
 /**
- * Bstr is a concrete Item that implements major type 3.
+ * Tstr is a concrete Item that implements major type 3.
  */
 class Tstr : public Item {
   public:
@@ -373,8 +409,9 @@ class Tstr : public Item {
     }
 
     const std::string& value() const { return mValue; }
+    std::string&& moveValue() { return std::move(mValue); }
 
-    virtual std::unique_ptr<Item> clone() const override { return std::make_unique<Tstr>(mValue); }
+    std::unique_ptr<Item> clone() const override { return std::make_unique<Tstr>(mValue); }
 
   private:
     void encodeValue(EncodeCallback encodeCallback) const;
@@ -443,13 +480,16 @@ class Array : public CompoundItem {
     template <typename T>
     Array&& add(T&& v) &&;
 
-    const std::unique_ptr<Item>& operator[](size_t index) const { return mEntries[index]; }
-    std::unique_ptr<Item>& operator[](size_t index) { return mEntries[index]; }
+    const std::unique_ptr<Item>& operator[](size_t index) const { return get(index); }
+    std::unique_ptr<Item>& operator[](size_t index) { return get(index); }
+
+    const std::unique_ptr<Item>& get(size_t index) const { return mEntries[index]; }
+    std::unique_ptr<Item>& get(size_t index) { return mEntries[index]; }
 
     MajorType type() const override { return kMajorType; }
     const Array* asArray() const override { return this; }
 
-    virtual std::unique_ptr<Item> clone() const override;
+    std::unique_ptr<Item> clone() const override;
 
     uint64_t addlInfo() const override { return size(); }
 };
@@ -495,7 +535,7 @@ class Map : public CompoundItem {
     }
 
     template <typename Key, typename Enable>
-    std::pair<std::unique_ptr<Item>&, bool> get(Key key);
+    const std::unique_ptr<Item>& get(Key key) const;
 
     std::pair<const std::unique_ptr<Item>&, const std::unique_ptr<Item>&> operator[](
             size_t index) const {
@@ -511,7 +551,23 @@ class Map : public CompoundItem {
     MajorType type() const override { return kMajorType; }
     const Map* asMap() const override { return this; }
 
-    virtual std::unique_ptr<Item> clone() const override;
+    // Sorts the map in canonical order, as defined in RFC 7049. Use this before encoding if you
+    // want canonicalization; cppbor does not canonicalize by default, though the integer encodings
+    // are always canonical and cppbor does not support indefinite-length encodings, so map order
+    // canonicalization is the only thing that needs to be done.
+    //
+    // Note that this canonicalization algorithm moves the map contents twice, so it isn't
+    // particularly efficient. Avoid using it unnecessarily on large maps. It does nothing for empty
+    // or single-entry maps, though, so it's recommended to always call it when you need a canonical
+    // map, even if the map is known to have less than two entries. That way if a maintainer later
+    // adds another item canonicalization will be preserved.
+    Map& canonicalize() &;
+    Map&& canonicalize() && {
+        canonicalize();
+        return std::move(*this);
+    }
+
+    std::unique_ptr<Item> clone() const override;
 
     uint64_t addlInfo() const override { return size(); }
 
@@ -558,7 +614,7 @@ class Semantic : public CompoundItem {
 
     uint64_t addlInfo() const override { return value(); }
 
-    virtual std::unique_ptr<Item> clone() const override {
+    std::unique_ptr<Item> clone() const override {
         assertInvariant();
         return std::make_unique<Semantic>(mValue, mEntries[0]->clone());
     }
@@ -618,7 +674,7 @@ class Bool : public Simple {
 
     bool value() const { return mValue; }
 
-    virtual std::unique_ptr<Item> clone() const override { return std::make_unique<Bool>(mValue); }
+    std::unique_ptr<Item> clone() const override { return std::make_unique<Bool>(mValue); }
 
   private:
     bool mValue;
@@ -646,8 +702,36 @@ class Null : public Simple {
         encodeHeader(NULL_V, encodeCallback);
     }
 
-    virtual std::unique_ptr<Item> clone() const override { return std::make_unique<Null>(); }
+    std::unique_ptr<Item> clone() const override { return std::make_unique<Null>(); }
 };
+
+/**
+ * Returns pretty-printed CBOR for |item|
+ *
+ * If a byte-string is larger than |maxBStrSize| its contents will not be printed, instead the value
+ * of the form "<bstr size=1099016 sha1=ef549cca331f73dfae2090e6a37c04c23f84b07b>" will be
+ * printed. Pass zero for |maxBStrSize| to disable this.
+ *
+ * The |mapKeysToNotPrint| parameter specifies the name of map values to not print. This is useful
+ * for unit tests.
+ */
+std::string prettyPrint(const Item* item, size_t maxBStrSize = 32,
+                        const std::vector<std::string>& mapKeysNotToPrint = {});
+
+/**
+ * Returns pretty-printed CBOR for |value|.
+ *
+ * Only valid CBOR should be passed to this function.
+ *
+ * If a byte-string is larger than |maxBStrSize| its contents will not be printed, instead the value
+ * of the form "<bstr size=1099016 sha1=ef549cca331f73dfae2090e6a37c04c23f84b07b>" will be
+ * printed. Pass zero for |maxBStrSize| to disable this.
+ *
+ * The |mapKeysToNotPrint| parameter specifies the name of map values to not print. This is useful
+ * for unit tests.
+ */
+std::string prettyPrint(const std::vector<uint8_t>& encodedCbor, size_t maxBStrSize = 32,
+                        const std::vector<std::string>& mapKeysNotToPrint = {});
 
 template <typename T>
 std::unique_ptr<T> downcastItem(std::unique_ptr<Item>&& v) {
@@ -717,6 +801,7 @@ struct is_text_type_v<
  *     (e1), unique_ptr (e2), reference (e3) or value (e3).  If provided by reference or value, will
  *     be moved if possible.  If provided by pointer, ownership is taken.
  * (f) null pointer;
+ * (g) enums, using the underlying integer value.
  */
 template <typename T>
 std::unique_ptr<Item> makeItem(T v) {
@@ -753,6 +838,8 @@ std::unique_ptr<Item> makeItem(T v) {
         p = new T(std::move(v));
     } else if constexpr (/* case f */ std::is_null_pointer_v<T>) {
         p = new Null();
+    } else if constexpr (/* case g */ std::is_enum_v<T>) {
+        return makeItem(static_cast<std::underlying_type_t<T>>(v));
     } else {
         // It's odd that this can't be static_assert(false), since it shouldn't be evaluated if one
         // of the above ifs matches.  But static_assert(false) always triggers.
@@ -805,17 +892,20 @@ Map&& Map::add(Key&& key, Value&& value) && {
     return std::move(*this);
 }
 
-template <typename Key, typename = std::enable_if_t<std::is_integral_v<Key> ||
-                                                    details::is_text_type_v<Key>::value>>
-std::pair<std::unique_ptr<Item>&, bool> Map::get(Key key) {
+static const std::unique_ptr<Item> kEmptyItemPtr;
+
+template <typename Key,
+          typename = std::enable_if_t<std::is_integral_v<Key> || std::is_enum_v<Key> ||
+                                      details::is_text_type_v<Key>::value>>
+const std::unique_ptr<Item>& Map::get(Key key) const {
     assertInvariant();
     auto keyItem = details::makeItem(key);
     for (size_t i = 0; i < mEntries.size(); i += 2) {
         if (*keyItem == *mEntries[i]) {
-            return {mEntries[i + 1], true};
+            return mEntries[i + 1];
         }
     }
-    return {keyItem, false};
+    return kEmptyItemPtr;
 }
 
 template <typename T>
