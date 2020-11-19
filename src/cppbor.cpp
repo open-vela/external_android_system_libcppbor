@@ -16,11 +16,19 @@
 
 #include "cppbor.h"
 
+#include <inttypes.h>
+#include <openssl/sha.h>
+
+#include "cppbor_parse.h"
+
+using std::string;
+using std::vector;
+
 #ifndef __TRUSTY__
-    #include <android-base/logging.h>
-    #define LOG_TAG "CppBor"
+#include <android-base/logging.h>
+#define LOG_TAG "CppBor"
 #else
-    #define CHECK(x) (void)(x)
+#define CHECK(x) (void)(x)
 #endif
 
 namespace cppbor {
@@ -42,6 +50,187 @@ void writeBigEndian(T value, std::function<void(uint8_t)>& cb) {
         cb(static_cast<uint8_t>(value >> (8 * (sizeof(value) - 1))));
         value = static_cast<T>(value << 8);
     }
+}
+
+bool cborAreAllElementsNonCompound(const CompoundItem* compoundItem) {
+    if (compoundItem->type() == ARRAY) {
+        const Array* array = compoundItem->asArray();
+        for (size_t n = 0; n < array->size(); n++) {
+            const Item* entry = (*array)[n].get();
+            switch (entry->type()) {
+                case ARRAY:
+                case MAP:
+                    return false;
+                default:
+                    break;
+            }
+        }
+    } else {
+        const Map* map = compoundItem->asMap();
+        for (size_t n = 0; n < map->size(); n++) {
+            auto [keyEntry, valueEntry] = (*map)[n];
+            switch (keyEntry->type()) {
+                case ARRAY:
+                case MAP:
+                    return false;
+                default:
+                    break;
+            }
+            switch (valueEntry->type()) {
+                case ARRAY:
+                case MAP:
+                    return false;
+                default:
+                    break;
+            }
+        }
+    }
+    return true;
+}
+
+bool prettyPrintInternal(const Item* item, string& out, size_t indent, size_t maxBStrSize,
+                         const vector<string>& mapKeysToNotPrint) {
+    if (!item) {
+        out.append("<NULL>");
+        return false;
+    }
+
+    char buf[80];
+
+    string indentString(indent, ' ');
+
+    switch (item->type()) {
+        case UINT:
+            snprintf(buf, sizeof(buf), "%" PRIu64, item->asUint()->unsignedValue());
+            out.append(buf);
+            break;
+
+        case NINT:
+            snprintf(buf, sizeof(buf), "%" PRId64, item->asNint()->value());
+            out.append(buf);
+            break;
+
+        case BSTR: {
+            const Bstr* bstr = item->asBstr();
+            const vector<uint8_t>& value = bstr->value();
+            if (value.size() > maxBStrSize) {
+                unsigned char digest[SHA_DIGEST_LENGTH];
+                SHA_CTX ctx;
+                SHA1_Init(&ctx);
+                SHA1_Update(&ctx, value.data(), value.size());
+                SHA1_Final(digest, &ctx);
+                char buf2[SHA_DIGEST_LENGTH * 2 + 1];
+                for (size_t n = 0; n < SHA_DIGEST_LENGTH; n++) {
+                    snprintf(buf2 + n * 2, 3, "%02x", digest[n]);
+                }
+                snprintf(buf, sizeof(buf), "<bstr size=%zd sha1=%s>", value.size(), buf2);
+                out.append(buf);
+            } else {
+                out.append("{");
+                for (size_t n = 0; n < value.size(); n++) {
+                    if (n > 0) {
+                        out.append(", ");
+                    }
+                    snprintf(buf, sizeof(buf), "0x%02x", value[n]);
+                    out.append(buf);
+                }
+                out.append("}");
+            }
+        } break;
+
+        case TSTR:
+            out.append("'");
+            {
+                // TODO: escape "'" characters
+                out.append(item->asTstr()->value().c_str());
+            }
+            out.append("'");
+            break;
+
+        case ARRAY: {
+            const Array* array = item->asArray();
+            if (array->size() == 0) {
+                out.append("[]");
+            } else if (cborAreAllElementsNonCompound(array)) {
+                out.append("[");
+                for (size_t n = 0; n < array->size(); n++) {
+                    if (!prettyPrintInternal((*array)[n].get(), out, indent + 2, maxBStrSize,
+                                             mapKeysToNotPrint)) {
+                        return false;
+                    }
+                    out.append(", ");
+                }
+                out.append("]");
+            } else {
+                out.append("[\n" + indentString);
+                for (size_t n = 0; n < array->size(); n++) {
+                    out.append("  ");
+                    if (!prettyPrintInternal((*array)[n].get(), out, indent + 2, maxBStrSize,
+                                             mapKeysToNotPrint)) {
+                        return false;
+                    }
+                    out.append(",\n" + indentString);
+                }
+                out.append("]");
+            }
+        } break;
+
+        case MAP: {
+            const Map* map = item->asMap();
+
+            if (map->size() == 0) {
+                out.append("{}");
+            } else {
+                out.append("{\n" + indentString);
+                for (size_t n = 0; n < map->size(); n++) {
+                    out.append("  ");
+
+                    auto [map_key, map_value] = (*map)[n];
+
+                    if (!prettyPrintInternal(map_key.get(), out, indent + 2, maxBStrSize,
+                                             mapKeysToNotPrint)) {
+                        return false;
+                    }
+                    out.append(" : ");
+                    if (map_key->type() == TSTR &&
+                        std::find(mapKeysToNotPrint.begin(), mapKeysToNotPrint.end(),
+                                  map_key->asTstr()->value()) != mapKeysToNotPrint.end()) {
+                        out.append("<not printed>");
+                    } else {
+                        if (!prettyPrintInternal(map_value.get(), out, indent + 2, maxBStrSize,
+                                                 mapKeysToNotPrint)) {
+                            return false;
+                        }
+                    }
+                    out.append(",\n" + indentString);
+                }
+                out.append("}");
+            }
+        } break;
+
+        case SEMANTIC: {
+            const Semantic* semantic = item->asSemantic();
+            snprintf(buf, sizeof(buf), "tag %" PRIu64 " ", semantic->value());
+            out.append(buf);
+            prettyPrintInternal(semantic->child().get(), out, indent, maxBStrSize,
+                                mapKeysToNotPrint);
+        } break;
+
+        case SIMPLE:
+            const Bool* asBool = item->asSimple()->asBool();
+            const Null* asNull = item->asSimple()->asNull();
+            if (asBool != nullptr) {
+                out.append(asBool->value() ? "true" : "false");
+            } else if (asNull != nullptr) {
+                out.append("null");
+            } else {
+                LOG(ERROR) << "Only boolean/null is implemented for SIMPLE";
+                return false;
+            }
+            break;
+    }
+
+    return true;
 }
 
 }  // namespace
@@ -204,6 +393,53 @@ void Map::assertInvariant() const {
     CHECK(mEntries.size() % 2 == 0);
 }
 
+bool mapKeyLess(const std::pair<std::unique_ptr<Item>&, std::unique_ptr<Item>&>& a,
+                const std::pair<std::unique_ptr<Item>&, std::unique_ptr<Item>&>& b) {
+    auto keyA = a.first->encode();
+    auto keyB = b.first->encode();
+
+    // CBOR map canonicalization rules are:
+
+    // 1. If two keys have different lengths, the shorter one sorts earlier.
+    if (keyA.size() < keyB.size()) return true;
+    if (keyA.size() > keyB.size()) return false;
+
+    // 2. If two keys have the same length, the one with the lower value in
+    // (byte-wise) lexical order sorts earlier.
+    return std::lexicographical_compare(keyA.begin(), keyA.end(), keyB.begin(), keyB.end());
+}
+
+Map& Map::canonicalize() & {
+    assertInvariant();
+
+    if (size() < 2) {
+        // Empty or single-entry map; no need to reorder.
+        return *this;
+    }
+
+    // The entries of a Map are stored in a flat vector.  We can't easily apply
+    // std::sort on that, so instead we move all of the entries into a vector of
+    // std::pair, sort that, then move all of the entries back into the original
+    // flat vector.
+    vector<std::pair<std::unique_ptr<Item>, std::unique_ptr<Item>>> temp;
+    temp.reserve(size());
+
+    for (size_t i = 0; i < mEntries.size() - 1; i += 2) {
+        temp.push_back({std::move(mEntries[i]), std::move(mEntries[i + 1])});
+    }
+
+    std::sort(temp.begin(), temp.end(), mapKeyLess);
+
+    mEntries.resize(0);
+    mEntries.reserve(temp.size() * 2);  // Should be a NOP since capacity should be unchanged.
+    for (auto& entry : temp) {
+        mEntries.push_back(std::move(entry.first));
+        mEntries.push_back(std::move(entry.second));
+    }
+
+    return *this;
+}
+
 std::unique_ptr<Item> Map::clone() const {
     assertInvariant();
     auto res = std::make_unique<Map>();
@@ -223,6 +459,22 @@ std::unique_ptr<Item> Array::clone() const {
 
 void Semantic::assertInvariant() const {
     CHECK(mEntries.size() == 1);
+}
+
+string prettyPrint(const Item* item, size_t maxBStrSize, const vector<string>& mapKeysToNotPrint) {
+    string out;
+    prettyPrintInternal(item, out, 0, maxBStrSize, mapKeysToNotPrint);
+    return out;
+}
+string prettyPrint(const vector<uint8_t>& encodedCbor, size_t maxBStrSize,
+                   const vector<string>& mapKeysToNotPrint) {
+    auto [item, _, message] = parse(encodedCbor);
+    if (item == nullptr) {
+        LOG(ERROR) << "Data to pretty print is not valid CBOR: " << message;
+        return "";
+    }
+
+    return prettyPrint(item.get(), maxBStrSize, mapKeysToNotPrint);
 }
 
 }  // namespace cppbor
