@@ -17,10 +17,10 @@
 #include "cppbor.h"
 
 #ifndef __TRUSTY__
-    #include <android-base/logging.h>
-    #define LOG_TAG "CppBor"
+#include <android-base/logging.h>
+#define LOG_TAG "CppBor"
 #else
-    #define CHECK(x) (void)(x)
+#define CHECK(x) (void)(x)
 #endif
 
 namespace cppbor {
