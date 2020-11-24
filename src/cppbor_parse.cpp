@@ -32,7 +32,7 @@ namespace {
 std::string insufficientLengthString(size_t bytesNeeded, size_t bytesAvail,
                                      const std::string& type) {
     char buf[1024];
-    snprintf(buf, sizeof(buf), "Need %zu byte(s) for %s, have %zu", bytesNeeded, type.c_str(),
+    snprintf(buf, sizeof(buf), "Need %zu byte(s) for %s, have %zu.", bytesNeeded, type.c_str(),
              bytesAvail);
     return std::string(buf);
 }
