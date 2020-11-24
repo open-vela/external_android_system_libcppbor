@@ -871,6 +871,48 @@ TEST(CloningTest, Semantic) {
     EXPECT_EQ(*clone->asSemantic(), copy);
 }
 
+TEST(MapCanonicalizationTest, CanonicalizationTest) {
+    Map map;
+    map.add("hello", 1)
+            .add("h", 1)
+            .add(1, 1)
+            .add(-4, 1)
+            .add(-5, 1)
+            .add(2, 1)
+            .add("hellp", 1)
+            .add(254, 1)
+            .add(27, 1);
+
+    EXPECT_EQ(prettyPrint(&map),
+              "{\n"
+              "  'hello' : 1,\n"
+              "  'h' : 1,\n"
+              "  1 : 1,\n"
+              "  -4 : 1,\n"
+              "  -5 : 1,\n"
+              "  2 : 1,\n"
+              "  'hellp' : 1,\n"
+              "  254 : 1,\n"
+              "  27 : 1,\n"
+              "}");
+
+    map.canonicalize();
+
+    // Canonically ordered by key encoding.
+    EXPECT_EQ(prettyPrint(&map),
+              "{\n"
+              "  1 : 1,\n"
+              "  2 : 1,\n"
+              "  -4 : 1,\n"
+              "  -5 : 1,\n"
+              "  27 : 1,\n"
+              "  254 : 1,\n"
+              "  'h' : 1,\n"
+              "  'hello' : 1,\n"
+              "  'hellp' : 1,\n"
+              "}");
+}
+
 class MockParseClient : public ParseClient {
   public:
     MOCK_METHOD4(item, ParseClient*(std::unique_ptr<Item>& item, const uint8_t* hdrBegin,
@@ -1432,17 +1474,17 @@ TEST(MapGetValueByKeyTest, Map) {
     Array compoundItem(1, 2, 3, 4, 5, Map(4, 5, "a", "b"));
     auto clone = compoundItem.clone();
     Map item(1, 2, "key", "value", "item", std::move(compoundItem));
-    auto [value1, found1] = item.get(1);
-    EXPECT_TRUE(found1);
+    auto& value1 = item.get(1);
+    EXPECT_NE(value1.get(), nullptr);
     EXPECT_EQ(*value1, Uint(2));
-    auto [value2, found2] = item.get("key");
-    EXPECT_TRUE(found2);
+    auto& value2 = item.get("key");
+    EXPECT_NE(value2.get(), nullptr);
     EXPECT_EQ(*value2, Tstr("value"));
-    auto [value3, found3] = item.get("item");
-    EXPECT_TRUE(found3);
+    auto& value3 = item.get("item");
+    EXPECT_NE(value3.get(), nullptr);
     EXPECT_EQ(*value3, *clone);
-    auto [value4, found4] = item.get("wrong");
-    EXPECT_FALSE(found4);
+    auto& value4 = item.get("wrong");
+    EXPECT_EQ(value4.get(), nullptr);
 }
 
 TEST(EmptyBstrTest, Bstr) {
