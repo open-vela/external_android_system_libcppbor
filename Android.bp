@@ -25,7 +25,6 @@ cc_library {
     ],
     shared_libs: [
         "libbase",
-        "libcrypto",
     ]
 }
 
@@ -35,7 +34,7 @@ cc_test {
         "tests/cppbor_test.cpp"
     ],
     shared_libs: [
-        "libcppbor_external",
+        "libcppbor",
         "libbase",
     ],
     static_libs: [
@@ -50,7 +49,7 @@ cc_test_host {
         "tests/cppbor_test.cpp"
     ],
     shared_libs: [
-        "libcppbor_external",
+        "libcppbor",
         "libbase",
     ],
     static_libs: [
