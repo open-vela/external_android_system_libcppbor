@@ -395,20 +395,24 @@ void Map::assertInvariant() const {
     CHECK(mEntries.size() % 2 == 0);
 }
 
-bool mapKeyLess(const std::pair<std::unique_ptr<Item>&, std::unique_ptr<Item>&>& a,
-                const std::pair<std::unique_ptr<Item>&, std::unique_ptr<Item>&>& b) {
-    auto keyA = a.first->encode();
-    auto keyB = b.first->encode();
+bool mapKeyLess(const std::pair<std::unique_ptr<Item>, std::unique_ptr<Item>>& a,
+                const std::pair<std::unique_ptr<Item>, std::unique_ptr<Item>>& b) {
+    auto& keyA = a.first;
+    auto& keyB = b.first;
 
     // CBOR map canonicalization rules are:
 
     // 1. If two keys have different lengths, the shorter one sorts earlier.
-    if (keyA.size() < keyB.size()) return true;
-    if (keyA.size() > keyB.size()) return false;
+    if (keyA->encodedSize() < keyB->encodedSize()) return true;
+    if (keyA->encodedSize() > keyB->encodedSize()) return false;
 
-    // 2. If two keys have the same length, the one with the lower value in
-    // (byte-wise) lexical order sorts earlier.
-    return std::lexicographical_compare(keyA.begin(), keyA.end(), keyB.begin(), keyB.end());
+    // 2. If two keys have the same length, the one with the lower value in (byte-wise) lexical
+    // order sorts earlier.  This requires encoding both items.
+    auto encodedA = keyA->encode();
+    auto encodedB = keyB->encode();
+
+    return std::lexicographical_compare(encodedA.begin(), encodedA.end(),  //
+                                        encodedB.begin(), encodedB.end());
 }
 
 Map& Map::canonicalize() & {
