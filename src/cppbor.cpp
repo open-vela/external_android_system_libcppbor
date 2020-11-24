@@ -224,7 +224,9 @@ bool prettyPrintInternal(const Item* item, string& out, size_t indent, size_t ma
             } else if (asNull != nullptr) {
                 out.append("null");
             } else {
+#ifndef __TRUSTY__
                 LOG(ERROR) << "Only boolean/null is implemented for SIMPLE";
+#endif  // __TRUSTY__
                 return false;
             }
             break;
@@ -470,7 +472,9 @@ string prettyPrint(const vector<uint8_t>& encodedCbor, size_t maxBStrSize,
                    const vector<string>& mapKeysToNotPrint) {
     auto [item, _, message] = parse(encodedCbor);
     if (item == nullptr) {
+#ifndef __TRUSTY__
         LOG(ERROR) << "Data to pretty print is not valid CBOR: " << message;
+#endif  // __TRUSTY__
         return "";
     }
 
