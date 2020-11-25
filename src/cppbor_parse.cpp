@@ -114,7 +114,7 @@ class IncompleteItem {
 
 class IncompleteArray : public Array, public IncompleteItem {
   public:
-    IncompleteArray(size_t size) : mSize(size) {}
+    explicit IncompleteArray(size_t size) : mSize(size) {}
 
     // We return the "complete" size, rather than the actual size.
     size_t size() const override { return mSize; }
@@ -130,23 +130,28 @@ class IncompleteArray : public Array, public IncompleteItem {
 
 class IncompleteMap : public Map, public IncompleteItem {
   public:
-    IncompleteMap(size_t size) : mSize(size) {}
+    explicit IncompleteMap(size_t size) : mSize(size) {}
 
     // We return the "complete" size, rather than the actual size.
     size_t size() const override { return mSize; }
 
     void add(std::unique_ptr<Item> item) override {
-        mEntries.reserve(mSize * 2);
-        mEntries.push_back(std::move(item));
+        if (mKeyHeldForAdding) {
+            mEntries.reserve(mSize);
+            mEntries.push_back({std::move(mKeyHeldForAdding), std::move(item)});
+        } else {
+            mKeyHeldForAdding = std::move(item);
+        }
     }
 
   private:
+    std::unique_ptr<Item> mKeyHeldForAdding;
     size_t mSize;
 };
 
 class IncompleteSemantic : public Semantic, public IncompleteItem {
   public:
-    IncompleteSemantic(uint64_t value) : Semantic(value) {}
+    explicit IncompleteSemantic(uint64_t value) : Semantic(value) {}
 
     // We return the "complete" size, rather than the actual size.
     size_t size() const override { return 1; }

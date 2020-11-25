@@ -67,8 +67,7 @@ bool cborAreAllElementsNonCompound(const Item* compoundItem) {
         }
     } else {
         const Map* map = compoundItem->asMap();
-        for (size_t n = 0; n < map->size(); n++) {
-            auto [keyEntry, valueEntry] = (*map)[n];
+        for (auto& [keyEntry, valueEntry] : *map) {
             switch (keyEntry->type()) {
                 case ARRAY:
                 case MAP:
@@ -182,10 +181,8 @@ bool prettyPrintInternal(const Item* item, string& out, size_t indent, size_t ma
                 out.append("{}");
             } else {
                 out.append("{\n" + indentString);
-                for (size_t n = 0; n < map->size(); n++) {
+                for (auto& [map_key, map_value] : *map) {
                     out.append("  ");
-
-                    auto [map_key, map_value] = (*map)[n];
 
                     if (!prettyPrintInternal(map_key.get(), out, indent + 2, maxBStrSize,
                                              mapKeysToNotPrint)) {
@@ -400,17 +397,20 @@ std::unique_ptr<Item> Array::clone() const {
 
 bool Map::operator==(const Map& other) const& {
     return size() == other.size()
-           // Can't use vector::operator== because the contents are pointers.  std::equal lets us
-           // provide a predicate that does the dereferencing.
-           && std::equal(mEntries.begin(), mEntries.end(), other.mEntries.begin(),
-                         [](auto& a, auto& b) -> bool { return *a == *b; });
+           // Can't use vector::operator== because the contents are pairs of pointers.  std::equal
+           // lets us provide a predicate that does the dereferencing.
+           && std::equal(begin(), end(), other.begin(), [](auto& a, auto& b) {
+                  return *a.first == *b.first && *a.second == *b.second;
+              });
 }
 
 uint8_t* Map::encode(uint8_t* pos, const uint8_t* end) const {
     pos = encodeHeader(size(), pos, end);
     if (!pos) return nullptr;
     for (auto& entry : mEntries) {
-        pos = entry->encode(pos, end);
+        pos = entry.first->encode(pos, end);
+        if (!pos) return nullptr;
+        pos = entry.second->encode(pos, end);
         if (!pos) return nullptr;
     }
     return pos;
@@ -419,71 +419,76 @@ uint8_t* Map::encode(uint8_t* pos, const uint8_t* end) const {
 void Map::encode(EncodeCallback encodeCallback) const {
     encodeHeader(size(), encodeCallback);
     for (auto& entry : mEntries) {
-        entry->encode(encodeCallback);
+        entry.first->encode(encodeCallback);
+        entry.second->encode(encodeCallback);
     }
 }
 
-void Map::assertInvariant() const {
-    CHECK(mEntries.size() % 2 == 0);
-}
-
-bool mapKeyLess(const std::pair<std::unique_ptr<Item>, std::unique_ptr<Item>>& a,
-                const std::pair<std::unique_ptr<Item>, std::unique_ptr<Item>>& b) {
-    auto& keyA = a.first;
-    auto& keyB = b.first;
-
+bool Map::keyLess(const Item* a, const Item* b) {
     // CBOR map canonicalization rules are:
 
     // 1. If two keys have different lengths, the shorter one sorts earlier.
-    if (keyA->encodedSize() < keyB->encodedSize()) return true;
-    if (keyA->encodedSize() > keyB->encodedSize()) return false;
+    if (a->encodedSize() < b->encodedSize()) return true;
+    if (a->encodedSize() > b->encodedSize()) return false;
 
     // 2. If two keys have the same length, the one with the lower value in (byte-wise) lexical
     // order sorts earlier.  This requires encoding both items.
-    auto encodedA = keyA->encode();
-    auto encodedB = keyB->encode();
+    auto encodedA = a->encode();
+    auto encodedB = b->encode();
 
     return std::lexicographical_compare(encodedA.begin(), encodedA.end(),  //
                                         encodedB.begin(), encodedB.end());
 }
 
-Map& Map::canonicalize() & {
-    assertInvariant();
+void recursivelyCanonicalize(std::unique_ptr<Item>& item) {
+    switch (item->type()) {
+        case UINT:
+        case NINT:
+        case BSTR:
+        case TSTR:
+        case SIMPLE:
+            return;
 
-    if (size() < 2) {
-        // Empty or single-entry map; no need to reorder.
+        case ARRAY:
+            std::for_each(item->asArray()->begin(), item->asArray()->end(),
+                          recursivelyCanonicalize);
+            return;
+
+        case MAP:
+            item->asMap()->canonicalize(true /* recurse */);
+            return;
+
+        case SEMANTIC:
+            recursivelyCanonicalize(item->asSemantic()->child());
+            return;
+    }
+}
+
+Map& Map::canonicalize(bool recurse) & {
+    if (recurse) {
+        for (auto& entry : mEntries) {
+            recursivelyCanonicalize(entry.first);
+            recursivelyCanonicalize(entry.second);
+        }
+    }
+
+    if (size() < 2 || mCanonicalized) {
+        // Trivially or already canonical; do nothing.
         return *this;
     }
 
-    // The entries of a Map are stored in a flat vector.  We can't easily apply
-    // std::sort on that, so instead we move all of the entries into a vector of
-    // std::pair, sort that, then move all of the entries back into the original
-    // flat vector.
-    vector<std::pair<std::unique_ptr<Item>, std::unique_ptr<Item>>> temp;
-    temp.reserve(size());
-
-    for (size_t i = 0; i < mEntries.size() - 1; i += 2) {
-        temp.push_back({std::move(mEntries[i]), std::move(mEntries[i + 1])});
-    }
-
-    std::sort(temp.begin(), temp.end(), mapKeyLess);
-
-    mEntries.resize(0);
-    mEntries.reserve(temp.size() * 2);  // Should be a NOP since capacity should be unchanged.
-    for (auto& entry : temp) {
-        mEntries.push_back(std::move(entry.first));
-        mEntries.push_back(std::move(entry.second));
-    }
-
+    std::sort(begin(), end(),
+              [](auto& a, auto& b) { return keyLess(a.first.get(), b.first.get()); });
+    mCanonicalized = true;
     return *this;
 }
 
 std::unique_ptr<Item> Map::clone() const {
-    assertInvariant();
     auto res = std::make_unique<Map>();
-    for (size_t i = 0; i < mEntries.size(); i += 2) {
-        res->add(mEntries[i]->clone(), mEntries[i + 1]->clone());
+    for (auto& [key, value] : *this) {
+        res->add(key->clone(), value->clone());
     }
+    res->mCanonicalized = mCanonicalized;
     return res;
 }
 
