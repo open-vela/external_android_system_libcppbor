@@ -508,6 +508,8 @@ class Map : public Item {
   public:
     static constexpr MajorType kMajorType = MAP;
 
+    using entry_type = std::pair<std::unique_ptr<Item>, std::unique_ptr<Item>>;
+
     Map() = default;
     Map(const Map& other) = delete;
     Map(Map&&) = default;
@@ -536,60 +538,80 @@ class Map : public Item {
 
     bool isCompound() const override { return true; }
 
-    virtual size_t size() const {
-        assertInvariant();
-        return mEntries.size() / 2;
-    }
+    virtual size_t size() const { return mEntries.size(); }
 
     size_t encodedSize() const override {
-        return std::accumulate(mEntries.begin(), mEntries.end(), headerSize(size()),
-                               [](size_t sum, auto& entry) { return sum + entry->encodedSize(); });
+        return std::accumulate(
+                mEntries.begin(), mEntries.end(), headerSize(size()), [](size_t sum, auto& entry) {
+                    return sum + entry.first->encodedSize() + entry.second->encodedSize();
+                });
     }
 
     using Item::encode;  // Make base versions visible.
     uint8_t* encode(uint8_t* pos, const uint8_t* end) const override;
     void encode(EncodeCallback encodeCallback) const override;
 
+    /**
+     * Find and return the value associated with `key`, if any.
+     *
+     * If the searched-for `key` is not present, returns `nullptr`.
+     *
+     * Note that if the map is canonicalized (sorted), Map::get() peforms a binary search.  If your
+     * map is large and you're searching in it many times, it may be worthwhile to canonicalize it
+     * to make Map::get() faster.  Any use of a method that might modify the map disables the
+     * speedup.
+     */
     template <typename Key, typename Enable>
     const std::unique_ptr<Item>& get(Key key) const;
 
-    std::pair<const std::unique_ptr<Item>&, const std::unique_ptr<Item>&> operator[](
-            size_t index) const {
-        assertInvariant();
-        return {mEntries[index * 2], mEntries[index * 2 + 1]};
+    // Note that use of non-const operator[] marks the map as not canonicalized.
+    auto& operator[](size_t index) {
+        mCanonicalized = false;
+        return mEntries[index];
     }
-
-    std::pair<std::unique_ptr<Item>&, std::unique_ptr<Item>&> operator[](size_t index) {
-        assertInvariant();
-        return {mEntries[index * 2], mEntries[index * 2 + 1]};
-    }
+    const auto& operator[](size_t index) const { return mEntries[index]; }
 
     MajorType type() const override { return kMajorType; }
     Map* asMap() override { return this; }
 
-    // Sorts the map in canonical order, as defined in RFC 7049. Use this before encoding if you
-    // want canonicalization; cppbor does not canonicalize by default, though the integer encodings
-    // are always canonical and cppbor does not support indefinite-length encodings, so map order
-    // canonicalization is the only thing that needs to be done.
-    //
-    // Note that this canonicalization algorithm moves the map contents twice, so it isn't
-    // particularly efficient. Avoid using it unnecessarily on large maps. It does nothing for empty
-    // or single-entry maps, though, so it's recommended to always call it when you need a canonical
-    // map, even if the map is known to have less than two entries. That way if a maintainer later
-    // adds another item canonicalization will be preserved.
-    Map& canonicalize() &;
-    Map&& canonicalize() && {
-        canonicalize();
+    /**
+     * Sorts the map in canonical order, as defined in RFC 7049. Use this before encoding if you
+     * want canonicalization; cppbor does not canonicalize by default, though the integer encodings
+     * are always canonical and cppbor does not support indefinite-length encodings, so map order
+     * canonicalization is the only thing that needs to be done.
+     *
+     * @param recurse If set to true, canonicalize() will also walk the contents of the map and
+     * canonicalize any contained maps as well.
+     */
+    Map& canonicalize(bool recurse = false) &;
+    Map&& canonicalize(bool recurse = false) && {
+        canonicalize(recurse);
         return std::move(*this);
     }
 
+    bool isCanonical() { return mCanonicalized; }
+
     std::unique_ptr<Item> clone() const override;
 
+    auto begin() {
+        mCanonicalized = false;
+        return mEntries.begin();
+    }
+    auto begin() const { return mEntries.begin(); }
+    auto end() {
+        mCanonicalized = false;
+        return mEntries.end();
+    }
+    auto end() const { return mEntries.end(); }
+
+    // Returns true if a < b, per CBOR map key canonicalization rules.
+    static bool keyLess(const Item* a, const Item* b);
+
   protected:
-    std::vector<std::unique_ptr<Item>> mEntries;
+    std::vector<entry_type> mEntries;
 
   private:
-    void assertInvariant() const;
+    bool mCanonicalized = false;
 };
 
 class Semantic : public Item {
@@ -872,6 +894,14 @@ std::unique_ptr<Item> makeItem(T v) {
     return std::unique_ptr<Item>(p);
 }
 
+inline void map_helper(Map& /* map */) {}
+
+template <typename Key, typename Value, typename... Rest>
+inline void map_helper(Map& map, Key&& key, Value&& value, Rest&&... rest) {
+    map.add(std::forward<Key>(key), std::forward<Value>(value));
+    map_helper(map, std::forward<Rest>(rest)...);
+}
+
 }  // namespace details
 
 template <typename... Args,
@@ -899,14 +929,15 @@ template <typename... Args,
           /* Prevent use as copy ctor */ typename = std::enable_if_t<(sizeof...(Args)) != 1>>
 Map::Map(Args&&... args) {
     static_assert((sizeof...(Args)) % 2 == 0, "Map must have an even number of entries");
-    mEntries.reserve(sizeof...(args));
-    (mEntries.push_back(details::makeItem(std::forward<Args>(args))), ...);
+    mEntries.reserve(sizeof...(args) / 2);
+    details::map_helper(*this, std::forward<Args>(args)...);
 }
 
 template <typename Key, typename Value>
 Map& Map::add(Key&& key, Value&& value) & {
-    mEntries.push_back(details::makeItem(std::forward<Key>(key)));
-    mEntries.push_back(details::makeItem(std::forward<Value>(value)));
+    mEntries.push_back({details::makeItem(std::forward<Key>(key)),
+                        details::makeItem(std::forward<Value>(value))});
+    mCanonicalized = false;
     return *this;
 }
 
@@ -922,14 +953,21 @@ template <typename Key,
           typename = std::enable_if_t<std::is_integral_v<Key> || std::is_enum_v<Key> ||
                                       details::is_text_type_v<Key>::value>>
 const std::unique_ptr<Item>& Map::get(Key key) const {
-    assertInvariant();
     auto keyItem = details::makeItem(key);
-    for (size_t i = 0; i < mEntries.size(); i += 2) {
-        if (*keyItem == *mEntries[i]) {
-            return mEntries[i + 1];
-        }
+
+    if (mCanonicalized) {
+        // It's sorted, so binary-search it.
+        auto found = std::lower_bound(begin(), end(), keyItem.get(),
+                                      [](const entry_type& entry, const Item* key) {
+                                          return keyLess(entry.first.get(), key);
+                                      });
+        return (found == end() || *found->first != *keyItem) ? kEmptyItemPtr : found->second;
+    } else {
+        // Unsorted, do a linear search.
+        auto found = std::find_if(
+                begin(), end(), [&](const entry_type& entry) { return *entry.first == *keyItem; });
+        return found == end() ? kEmptyItemPtr : found->second;
     }
-    return kEmptyItemPtr;
 }
 
 template <typename T>

@@ -829,7 +829,7 @@ TEST(CloningTest, Map) {
     EXPECT_EQ(clone->type(), MAP);
     EXPECT_NE(clone->asMap(), nullptr);
     EXPECT_EQ(item, *clone->asMap());
-    auto [key, value] = item[0];
+    auto& [key, value] = item[0];
     std::move(key);
     std::move(value);
     std::move(item);
@@ -904,6 +904,122 @@ TEST(MapCanonicalizationTest, CanonicalizationTest) {
               "  1 : 1,\n"
               "  2 : 1,\n"
               "  -4 : 1,\n"
+              "  -5 : 1,\n"
+              "  27 : 1,\n"
+              "  254 : 1,\n"
+              "  'h' : 1,\n"
+              "  'hello' : 1,\n"
+              "  'hellp' : 1,\n"
+              "}");
+}
+
+TEST(MapCanonicalizationTest, DecanonicalizationTest) {
+    Map map;
+    map.add("hello", 1)
+            .add("h", 1)
+            .add(1, 1)
+            .add(-4, 1)
+            .add(-5, 1)
+            .add(2, 1)
+            .add("hellp", 1)
+            .add(254, 1)
+            .add(27, 1);
+
+    EXPECT_FALSE(map.isCanonical());
+    map.canonicalize();
+    EXPECT_TRUE(map.isCanonical());
+
+    /*
+     * Any operation that could potentially mutate the contents of the map should mark it as
+     * non-canonical.  This includes getting non-const iterators or using the non-const [] operator.
+     */
+
+    map.begin();
+    EXPECT_FALSE(map.isCanonical());
+
+    map.canonicalize();
+    EXPECT_TRUE(map.isCanonical());
+
+    map.end();  // Non-const map.end() invalidates canonicalization.
+    EXPECT_FALSE(map.isCanonical());
+
+    map.canonicalize();
+    EXPECT_TRUE(map.isCanonical());
+
+    map[0];  // Non-const map.operator[]() invalidates canonicalization.
+    EXPECT_FALSE(map.isCanonical());
+}
+
+TEST(MapCanonicalizationTest, RecursiveTest) {
+    auto map = Map()  //
+                       .add("hello", 1)
+                       .add("h", 1)
+                       .add(1, 1)
+                       .add(-4, Array(  //
+                                        2, 1,
+                                        Map()  //
+                                                .add("b", 1)
+                                                .add(Map()  //
+                                                             .add("hello", "goodbye")
+                                                             .add(1, 9)
+                                                             .add(0, 3),
+                                                     Map()  //
+                                                             .add("b", 1)
+                                                             .add("a", 2))))
+                       .add(-5, 1)
+                       .add(2, 1)
+                       .add("hellp", 1)
+                       .add(254, 1)
+                       .add(27, 1);
+
+    EXPECT_EQ(prettyPrint(&map),
+              "{\n"
+              "  'hello' : 1,\n"
+              "  'h' : 1,\n"
+              "  1 : 1,\n"
+              "  -4 : [\n"
+              "    2,\n"
+              "    1,\n"
+              "    {\n"
+              "      'b' : 1,\n"
+              "      {\n"
+              "        'hello' : 'goodbye',\n"
+              "        1 : 9,\n"
+              "        0 : 3,\n"
+              "      } : {\n"
+              "        'b' : 1,\n"
+              "        'a' : 2,\n"
+              "      },\n"
+              "    },\n"
+              "  ],\n"
+              "  -5 : 1,\n"
+              "  2 : 1,\n"
+              "  'hellp' : 1,\n"
+              "  254 : 1,\n"
+              "  27 : 1,\n"
+              "}");
+
+    map.canonicalize(true /* recurse */);
+
+    EXPECT_EQ(prettyPrint(&map),
+              "{\n"
+              "  1 : 1,\n"
+              "  2 : 1,\n"
+              "  -4 : [\n"
+              "    2,\n"
+              "    1,\n"
+              "    {\n"
+              "      'b' : 1,\n"
+              "      {\n"
+              "        0 : 3,\n"
+              "        1 : 9,\n"
+              "        'hello' : 'goodbye',\n"
+              "      } : {\n"
+              "        'a' : 2,\n"
+              "        'b' : 1,\n"
+              "      },\n"
+              "    },\n"
+              "  ],\n"
               "  -5 : 1,\n"
               "  27 : 1,\n"
               "  254 : 1,\n"
@@ -1555,6 +1671,58 @@ TEST(ArrayIterationTest, BidirectionalTest) {
     EXPECT_EQ(**iter, Nint(-4));
 
     EXPECT_EQ(++iter, array.end());
+}
+
+TEST(MapIterationTest, EmptyMap) {
+    Map map;
+
+    EXPECT_EQ(map.begin(), map.end());
+}
+
+TEST(MapIterationTest, ForwardTest) {
+    Map map(1, 2, 3, "hello", -4, 5);
+
+    auto iter = map.begin();
+    ASSERT_NE(iter, map.end());
+    EXPECT_EQ(*iter->first, Uint(1));
+    EXPECT_EQ(*iter->second, Uint(2));
+
+    ASSERT_NE(++iter, map.end());
+    EXPECT_EQ(*iter->first, Uint(3));
+    EXPECT_EQ(*(iter++)->second, Tstr("hello"));
+
+    ASSERT_NE(iter, map.end());
+    EXPECT_EQ(*iter->first, Nint(-4));
+    EXPECT_EQ(*(iter++)->second, Uint(5));
+
+    EXPECT_EQ(iter, map.end());
+}
+
+TEST(MapIterationTest, BidirectionalTest) {
+    Map map(1, 2, 3, "hello", -4, 5);
+
+    auto iter = map.begin();
+    ASSERT_NE(iter, map.end());
+    EXPECT_EQ(*iter->first, Uint(1));
+    EXPECT_EQ(*iter->second, Uint(2));
+
+    ASSERT_NE(++iter, map.end());
+    EXPECT_EQ(*iter->first, Uint(3));
+    EXPECT_EQ(*(iter--)->second, Tstr("hello"));
+
+    ASSERT_NE(iter, map.end());
+    EXPECT_EQ(*iter->first, Uint(1));
+    EXPECT_EQ(*(iter++)->second, Uint(2));
+
+    ASSERT_NE(iter, map.end());
+    EXPECT_EQ(*iter->first, Uint(3));
+    EXPECT_EQ(*iter->second, Tstr("hello"));
+
+    ASSERT_NE(++iter, map.end());
+    EXPECT_EQ(*iter->first, Nint(-4));
+    EXPECT_EQ(*(iter++)->second, Uint(5));
+
+    EXPECT_EQ(iter, map.end());
 }
 
 int main(int argc, char** argv) {
