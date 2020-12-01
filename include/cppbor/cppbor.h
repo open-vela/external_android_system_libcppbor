@@ -488,6 +488,11 @@ class Array : public Item {
 
     std::unique_ptr<Item> clone() const override;
 
+    auto begin() { return mEntries.begin(); }
+    auto begin() const { return mEntries.begin(); }
+    auto end() { return mEntries.end(); }
+    auto end() const { return mEntries.end(); }
+
   protected:
     std::vector<std::unique_ptr<Item>> mEntries;
 };

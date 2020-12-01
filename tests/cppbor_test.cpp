@@ -1495,6 +1495,68 @@ TEST(EmptyBstrTest, Bstr) {
     EXPECT_EQ(*obj, bstr);
 }
 
+TEST(ArrayIterationTest, EmptyArray) {
+    Array array;
+    EXPECT_EQ(array.begin(), array.end());
+
+    const Array& const_array = array;
+    EXPECT_EQ(const_array.begin(), const_array.end());
+}
+
+TEST(ArrayIterationTest, ForwardTest) {
+    Array array(1, 2, 3, "hello", -4);
+
+    auto iter = array.begin();
+    ASSERT_NE(iter, array.end());
+    EXPECT_EQ(**iter, Uint(1));
+
+    ASSERT_NE(++iter, array.end());
+    EXPECT_EQ(**iter++, Uint(2));
+
+    ASSERT_NE(iter, array.end());
+    EXPECT_EQ(**iter, Uint(3));
+
+    ASSERT_NE(++iter, array.end());
+    EXPECT_EQ(**iter++, Tstr("hello"));
+
+    ASSERT_NE(iter, array.end());
+    EXPECT_EQ(**iter, Nint(-4));
+
+    EXPECT_EQ(++iter, array.end());
+}
+
+TEST(ArrayIterationTest, BidirectionalTest) {
+    Array array(1, 2, 3, "hello", -4);
+
+    auto iter = array.begin();
+    ASSERT_NE(iter, array.end());
+    EXPECT_EQ(**iter, Uint(1));
+
+    ASSERT_NE(++iter, array.end());
+    EXPECT_EQ(**iter, Uint(2));
+
+    ASSERT_NE(--iter, array.end());
+    ASSERT_EQ(iter, array.begin());
+    EXPECT_EQ(**iter, Uint(1));
+
+    ASSERT_NE(++iter, array.end());
+    EXPECT_EQ(**iter, Uint(2));
+
+    ASSERT_NE(++iter, array.end());
+    EXPECT_EQ(**iter--, Uint(3));
+
+    ASSERT_NE(++iter, array.end());
+    EXPECT_EQ(**iter, Uint(3));
+
+    ASSERT_NE(++iter, array.end());
+    EXPECT_EQ(**iter, Tstr("hello"));
+
+    ASSERT_NE(++iter, array.end());
+    EXPECT_EQ(**iter, Nint(-4));
+
+    EXPECT_EQ(++iter, array.end());
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
