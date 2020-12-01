@@ -52,7 +52,7 @@ void writeBigEndian(T value, std::function<void(uint8_t)>& cb) {
     }
 }
 
-bool cborAreAllElementsNonCompound(const CompoundItem* compoundItem) {
+bool cborAreAllElementsNonCompound(const Item* compoundItem) {
     if (compoundItem->type() == ARRAY) {
         const Array* array = compoundItem->asArray();
         for (size_t n = 0; n < array->size(); n++) {
@@ -365,17 +365,16 @@ void Tstr::encodeValue(EncodeCallback encodeCallback) const {
     }
 }
 
-bool CompoundItem::operator==(const CompoundItem& other) const& {
-    return type() == other.type()             //
-           && addlInfo() == other.addlInfo()  //
+bool Array::operator==(const Array& other) const& {
+    return size() == other.size()
            // Can't use vector::operator== because the contents are pointers.  std::equal lets us
            // provide a predicate that does the dereferencing.
            && std::equal(mEntries.begin(), mEntries.end(), other.mEntries.begin(),
                          [](auto& a, auto& b) -> bool { return *a == *b; });
 }
 
-uint8_t* CompoundItem::encode(uint8_t* pos, const uint8_t* end) const {
-    pos = encodeHeader(addlInfo(), pos, end);
+uint8_t* Array::encode(uint8_t* pos, const uint8_t* end) const {
+    pos = encodeHeader(size(), pos, end);
     if (!pos) return nullptr;
     for (auto& entry : mEntries) {
         pos = entry->encode(pos, end);
@@ -384,8 +383,41 @@ uint8_t* CompoundItem::encode(uint8_t* pos, const uint8_t* end) const {
     return pos;
 }
 
-void CompoundItem::encode(EncodeCallback encodeCallback) const {
-    encodeHeader(addlInfo(), encodeCallback);
+void Array::encode(EncodeCallback encodeCallback) const {
+    encodeHeader(size(), encodeCallback);
+    for (auto& entry : mEntries) {
+        entry->encode(encodeCallback);
+    }
+}
+
+std::unique_ptr<Item> Array::clone() const {
+    auto res = std::make_unique<Array>();
+    for (size_t i = 0; i < mEntries.size(); i++) {
+        res->add(mEntries[i]->clone());
+    }
+    return res;
+}
+
+bool Map::operator==(const Map& other) const& {
+    return size() == other.size()
+           // Can't use vector::operator== because the contents are pointers.  std::equal lets us
+           // provide a predicate that does the dereferencing.
+           && std::equal(mEntries.begin(), mEntries.end(), other.mEntries.begin(),
+                         [](auto& a, auto& b) -> bool { return *a == *b; });
+}
+
+uint8_t* Map::encode(uint8_t* pos, const uint8_t* end) const {
+    pos = encodeHeader(size(), pos, end);
+    if (!pos) return nullptr;
+    for (auto& entry : mEntries) {
+        pos = entry->encode(pos, end);
+        if (!pos) return nullptr;
+    }
+    return pos;
+}
+
+void Map::encode(EncodeCallback encodeCallback) const {
+    encodeHeader(size(), encodeCallback);
     for (auto& entry : mEntries) {
         entry->encode(encodeCallback);
     }
@@ -455,12 +487,20 @@ std::unique_ptr<Item> Map::clone() const {
     return res;
 }
 
-std::unique_ptr<Item> Array::clone() const {
-    auto res = std::make_unique<Array>();
-    for (size_t i = 0; i < mEntries.size(); i++) {
-        res->add(mEntries[i]->clone());
-    }
-    return res;
+bool Semantic::operator==(const Semantic& other) const& {
+    assertInvariant();
+    return *mEntries.front() == *other.mEntries.front();
+}
+
+uint8_t* Semantic::encode(uint8_t* pos, const uint8_t* end) const {
+    pos = encodeHeader(value(), pos, end);
+    if (!pos) return nullptr;
+    return mEntries.front()->encode(pos, end);
+}
+
+void Semantic::encode(EncodeCallback encodeCallback) const {
+    encodeHeader(value(), encodeCallback);
+    mEntries.front()->encode(encodeCallback);
 }
 
 void Semantic::assertInvariant() const {
