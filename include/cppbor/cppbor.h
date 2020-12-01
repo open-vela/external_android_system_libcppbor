@@ -112,15 +112,24 @@ class Item {
     virtual MajorType type() const = 0;
 
     // These methods safely downcast an Item to the appropriate subclass.
-    virtual const Int* asInt() const { return nullptr; }
-    virtual const Uint* asUint() const { return nullptr; }
-    virtual const Nint* asNint() const { return nullptr; }
-    virtual const Tstr* asTstr() const { return nullptr; }
-    virtual const Bstr* asBstr() const { return nullptr; }
-    virtual const Simple* asSimple() const { return nullptr; }
-    virtual const Map* asMap() const { return nullptr; }
-    virtual const Array* asArray() const { return nullptr; }
-    virtual const Semantic* asSemantic() const { return nullptr; }
+    virtual Int* asInt() { return nullptr; }
+    const Int* asInt() const { return const_cast<Item*>(this)->asInt(); }
+    virtual Uint* asUint() { return nullptr; }
+    const Uint* asUint() const { return const_cast<Item*>(this)->asUint(); }
+    virtual Nint* asNint() { return nullptr; }
+    const Nint* asNint() const { return const_cast<Item*>(this)->asNint(); }
+    virtual Tstr* asTstr() { return nullptr; }
+    const Tstr* asTstr() const { return const_cast<Item*>(this)->asTstr(); }
+    virtual Bstr* asBstr() { return nullptr; }
+    const Bstr* asBstr() const { return const_cast<Item*>(this)->asBstr(); }
+    virtual Simple* asSimple() { return nullptr; }
+    const Simple* asSimple() const { return const_cast<Item*>(this)->asSimple(); }
+    virtual Map* asMap() { return nullptr; }
+    const Map* asMap() const { return const_cast<Item*>(this)->asMap(); }
+    virtual Array* asArray() { return nullptr; }
+    const Array* asArray() const { return const_cast<Item*>(this)->asArray(); }
+    virtual Semantic* asSemantic() { return nullptr; }
+    const Semantic* asSemantic() const { return const_cast<Item*>(this)->asSemantic(); }
 
     /**
      * Returns true if this is a "compound" item, i.e. one that contains one or more other items.
@@ -237,7 +246,7 @@ class Int : public Item {
 
     virtual int64_t value() const = 0;
 
-    const Int* asInt() const override { return this; }
+    Int* asInt() override { return this; }
 };
 
 /**
@@ -252,7 +261,7 @@ class Uint : public Int {
     bool operator==(const Uint& other) const& { return mValue == other.mValue; }
 
     MajorType type() const override { return kMajorType; }
-    const Uint* asUint() const override { return this; }
+    Uint* asUint() override { return this; }
 
     size_t encodedSize() const override { return headerSize(mValue); }
 
@@ -290,7 +299,7 @@ class Nint : public Int {
     bool operator==(const Nint& other) const& { return mValue == other.mValue; }
 
     MajorType type() const override { return kMajorType; }
-    const Nint* asNint() const override { return this; }
+    Nint* asNint() override { return this; }
     size_t encodedSize() const override { return headerSize(addlInfo()); }
 
     int64_t value() const override { return mValue; }
@@ -348,7 +357,7 @@ class Bstr : public Item {
     bool operator==(const Bstr& other) const& { return mValue == other.mValue; }
 
     MajorType type() const override { return kMajorType; }
-    const Bstr* asBstr() const override { return this; }
+    Bstr* asBstr() override { return this; }
     size_t encodedSize() const override { return headerSize(mValue.size()) + mValue.size(); }
     using Item::encode;
     uint8_t* encode(uint8_t* pos, const uint8_t* end) const override;
@@ -399,7 +408,7 @@ class Tstr : public Item {
     bool operator==(const Tstr& other) const& { return mValue == other.mValue; }
 
     MajorType type() const override { return kMajorType; }
-    const Tstr* asTstr() const override { return this; }
+    Tstr* asTstr() override { return this; }
     size_t encodedSize() const override { return headerSize(mValue.size()) + mValue.size(); }
     using Item::encode;
     uint8_t* encode(uint8_t* pos, const uint8_t* end) const override;
@@ -475,7 +484,7 @@ class Array : public Item {
     std::unique_ptr<Item>& get(size_t index) { return mEntries[index]; }
 
     MajorType type() const override { return kMajorType; }
-    const Array* asArray() const override { return this; }
+    Array* asArray() override { return this; }
 
     std::unique_ptr<Item> clone() const override;
 
@@ -522,7 +531,7 @@ class Map : public Item {
 
     bool isCompound() const override { return true; }
 
-    virtual size_t size() const  {
+    virtual size_t size() const {
         assertInvariant();
         return mEntries.size() / 2;
     }
@@ -551,7 +560,7 @@ class Map : public Item {
     }
 
     MajorType type() const override { return kMajorType; }
-    const Map* asMap() const override { return this; }
+    Map* asMap() override { return this; }
 
     // Sorts the map in canonical order, as defined in RFC 7049. Use this before encoding if you
     // want canonicalization; cppbor does not canonicalize by default, though the integer encodings
@@ -594,7 +603,7 @@ class Semantic : public Item {
 
     bool isCompound() const override { return true; }
 
-    virtual size_t size() const  {
+    virtual size_t size() const {
         assertInvariant();
         return 1;
     }
@@ -609,7 +618,7 @@ class Semantic : public Item {
     void encode(EncodeCallback encodeCallback) const override;
 
     MajorType type() const override { return kMajorType; }
-    const Semantic* asSemantic() const override { return this; }
+    Semantic* asSemantic() override { return this; }
 
     const std::unique_ptr<Item>& child() const {
         assertInvariant();
@@ -651,7 +660,7 @@ class Simple : public Item {
     virtual SimpleType simpleType() const = 0;
     MajorType type() const override { return kMajorType; }
 
-    const Simple* asSimple() const override { return this; }
+    Simple* asSimple() override { return this; }
 
     virtual const Bool* asBool() const { return nullptr; };
     virtual const Null* asNull() const { return nullptr; };
