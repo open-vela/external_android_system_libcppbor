@@ -779,22 +779,6 @@ std::string prettyPrint(const Item* item, size_t maxBStrSize = 32,
 std::string prettyPrint(const std::vector<uint8_t>& encodedCbor, size_t maxBStrSize = 32,
                         const std::vector<std::string>& mapKeysNotToPrint = {});
 
-template <typename T>
-std::unique_ptr<T> downcastItem(std::unique_ptr<Item>&& v) {
-    static_assert(std::is_base_of_v<Item, T> && !std::is_abstract_v<T>,
-                  "returned type is not an Item or is an abstract class");
-    if (v && T::kMajorType == v->type()) {
-        if constexpr (std::is_base_of_v<Simple, T>) {
-            if (T::kSimpleType != v->asSimple()->simpleType()) {
-                return nullptr;
-            }
-        }
-        return std::unique_ptr<T>(static_cast<T*>(v.release()));
-    } else {
-        return nullptr;
-    }
-}
-
 /**
  * Details. Mostly you shouldn't have to look below, except perhaps at the docstring for makeItem.
  */
