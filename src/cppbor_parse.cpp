@@ -280,10 +280,7 @@ class FullParseClient : public ParseClient {
             // Starting a new compound data item, i.e. a new parent.  Save it on the parent stack.
             // It's safe to save a raw pointer because the unique_ptr is guaranteed to stay in
             // existence until the corresponding itemEnd() call.
-#if __has_feature(cxx_rtti)
-            assert(dynamic_cast<CompoundItem*>(item.get()));
-#endif
-            mParentStack.push(static_cast<CompoundItem*>(item.get()));
+            mParentStack.push(item.get());
             return this;
         } else {
             appendToLastParent(std::move(item));
@@ -336,7 +333,7 @@ class FullParseClient : public ParseClient {
     }
 
     std::unique_ptr<Item> mTheItem;
-    std::stack<CompoundItem*> mParentStack;
+    std::stack<Item*> mParentStack;
     const uint8_t* mPosition = nullptr;
     std::string mErrorMessage;
 };

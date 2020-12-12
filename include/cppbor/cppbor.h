@@ -419,33 +419,6 @@ class Tstr : public Item {
     std::string mValue;
 };
 
-/**
- * CompoundItem is an abstract Item that provides common functionality for Items that contain other
- * items, i.e. Arrays (CBOR type 4) and Maps (CBOR type 5).
- */
-class CompoundItem : public Item {
-  public:
-    bool operator==(const CompoundItem& other) const&;
-
-    virtual size_t size() const { return mEntries.size(); }
-
-    bool isCompound() const override { return true; }
-
-    size_t encodedSize() const override {
-        return std::accumulate(mEntries.begin(), mEntries.end(), headerSize(size()),
-                               [](size_t sum, auto& entry) { return sum + entry->encodedSize(); });
-    }
-
-    using Item::encode;  // Make base versions visible.
-    uint8_t* encode(uint8_t* pos, const uint8_t* end) const override;
-    void encode(EncodeCallback encodeCallback) const override;
-
-    virtual uint64_t addlInfo() const = 0;
-
-  protected:
-    std::vector<std::unique_ptr<Item>> mEntries;
-};
-
 /*
  * Array is a concrete Item that implements CBOR major type 4.
  *
@@ -453,7 +426,7 @@ class CompoundItem : public Item {
  * move-only ensures that they're never copied accidentally.  If you actually want to copy an Array,
  * use the clone() method.
  */
-class Array : public CompoundItem {
+class Array : public Item {
   public:
     static constexpr MajorType kMajorType = ARRAY;
 
@@ -462,6 +435,8 @@ class Array : public CompoundItem {
     Array(Array&&) = default;
     Array& operator=(const Array&) = delete;
     Array& operator=(Array&&) = default;
+
+    bool operator==(const Array& other) const&;
 
     /**
      * Construct an Array from a variable number of arguments of different types.  See
@@ -480,6 +455,19 @@ class Array : public CompoundItem {
     template <typename T>
     Array&& add(T&& v) &&;
 
+    bool isCompound() const override { return true; }
+
+    virtual size_t size() const { return mEntries.size(); }
+
+    size_t encodedSize() const override {
+        return std::accumulate(mEntries.begin(), mEntries.end(), headerSize(size()),
+                               [](size_t sum, auto& entry) { return sum + entry->encodedSize(); });
+    }
+
+    using Item::encode;  // Make base versions visible.
+    uint8_t* encode(uint8_t* pos, const uint8_t* end) const override;
+    void encode(EncodeCallback encodeCallback) const override;
+
     const std::unique_ptr<Item>& operator[](size_t index) const { return get(index); }
     std::unique_ptr<Item>& operator[](size_t index) { return get(index); }
 
@@ -491,7 +479,8 @@ class Array : public CompoundItem {
 
     std::unique_ptr<Item> clone() const override;
 
-    uint64_t addlInfo() const override { return size(); }
+  protected:
+    std::vector<std::unique_ptr<Item>> mEntries;
 };
 
 /*
@@ -501,7 +490,7 @@ class Array : public CompoundItem {
  * move-only ensures that they're never copied accidentally.  If you actually want to copy a
  * Map, use the clone() method.
  */
-class Map : public CompoundItem {
+class Map : public Item {
   public:
     static constexpr MajorType kMajorType = MAP;
 
@@ -510,6 +499,8 @@ class Map : public CompoundItem {
     Map(Map&&) = default;
     Map& operator=(const Map& other) = delete;
     Map& operator=(Map&&) = default;
+
+    bool operator==(const Map& other) const&;
 
     /**
      * Construct a Map from a variable number of arguments of different types.  An even number of
@@ -529,10 +520,21 @@ class Map : public CompoundItem {
     template <typename Key, typename Value>
     Map&& add(Key&& key, Value&& value) &&;
 
-    size_t size() const override {
+    bool isCompound() const override { return true; }
+
+    virtual size_t size() const  {
         assertInvariant();
         return mEntries.size() / 2;
     }
+
+    size_t encodedSize() const override {
+        return std::accumulate(mEntries.begin(), mEntries.end(), headerSize(size()),
+                               [](size_t sum, auto& entry) { return sum + entry->encodedSize(); });
+    }
+
+    using Item::encode;  // Make base versions visible.
+    uint8_t* encode(uint8_t* pos, const uint8_t* end) const override;
+    void encode(EncodeCallback encodeCallback) const override;
 
     template <typename Key, typename Enable>
     const std::unique_ptr<Item>& get(Key key) const;
@@ -569,13 +571,14 @@ class Map : public CompoundItem {
 
     std::unique_ptr<Item> clone() const override;
 
-    uint64_t addlInfo() const override { return size(); }
+  protected:
+    std::vector<std::unique_ptr<Item>> mEntries;
 
   private:
     void assertInvariant() const;
 };
 
-class Semantic : public CompoundItem {
+class Semantic : public Item {
   public:
     static constexpr MajorType kMajorType = SEMANTIC;
 
@@ -587,7 +590,11 @@ class Semantic : public CompoundItem {
     Semantic& operator=(const Semantic& other) = delete;
     Semantic& operator=(Semantic&&) = default;
 
-    size_t size() const override {
+    bool operator==(const Semantic& other) const&;
+
+    bool isCompound() const override { return true; }
+
+    virtual size_t size() const  {
         assertInvariant();
         return 1;
     }
@@ -596,6 +603,10 @@ class Semantic : public CompoundItem {
         return std::accumulate(mEntries.begin(), mEntries.end(), headerSize(mValue),
                                [](size_t sum, auto& entry) { return sum + entry->encodedSize(); });
     }
+
+    using Item::encode;  // Make base versions visible.
+    uint8_t* encode(uint8_t* pos, const uint8_t* end) const override;
+    void encode(EncodeCallback encodeCallback) const override;
 
     MajorType type() const override { return kMajorType; }
     const Semantic* asSemantic() const override { return this; }
@@ -612,8 +623,6 @@ class Semantic : public CompoundItem {
 
     uint64_t value() const { return mValue; }
 
-    uint64_t addlInfo() const override { return value(); }
-
     std::unique_ptr<Item> clone() const override {
         assertInvariant();
         return std::make_unique<Semantic>(mValue, mEntries[0]->clone());
@@ -623,6 +632,7 @@ class Semantic : public CompoundItem {
     Semantic() = default;
     Semantic(uint64_t value) : mValue(value) {}
     uint64_t mValue;
+    std::vector<std::unique_ptr<Item>> mEntries;
 
   private:
     void assertInvariant() const;
