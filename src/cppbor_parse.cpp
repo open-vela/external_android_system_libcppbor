@@ -149,14 +149,17 @@ class IncompleteMap : public Map, public IncompleteItem {
     size_t mSize;
 };
 
-class IncompleteSemanticTag : public SemanticTag, public IncompleteItem {
+class IncompleteSemantic : public Semantic, public IncompleteItem {
   public:
-    explicit IncompleteSemanticTag(uint64_t value) : SemanticTag(value) {}
+    explicit IncompleteSemantic(uint64_t value) : Semantic(value) {}
 
     // We return the "complete" size, rather than the actual size.
     size_t size() const override { return 1; }
 
-    void add(std::unique_ptr<Item> item) override { mTaggedItem = std::move(item); }
+    void add(std::unique_ptr<Item> item) override {
+        mEntries.reserve(1);
+        mEntries.push_back(std::move(item));
+    }
 };
 
 std::tuple<const uint8_t*, ParseClient*> handleEntries(size_t entryCount, const uint8_t* hdrBegin,
@@ -251,7 +254,7 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
                                   pos, end, "map", parseClient);
 
         case SEMANTIC:
-            return handleCompound(std::make_unique<IncompleteSemanticTag>(addlData), 1, begin, pos,
+            return handleCompound(std::make_unique<IncompleteSemantic>(addlData), 1, begin, pos,
                                   end, "semantic", parseClient);
 
         case SIMPLE:
@@ -323,18 +326,15 @@ class FullParseClient : public ParseClient {
 #if __has_feature(cxx_rtti)
         assert(dynamic_cast<IncompleteItem*>(parent));
 #endif
-
-        IncompleteItem* parentItem{};
         if (parent->type() == ARRAY) {
-            parentItem = static_cast<IncompleteArray*>(parent);
+            static_cast<IncompleteArray*>(parent)->add(std::move(item));
         } else if (parent->type() == MAP) {
-            parentItem = static_cast<IncompleteMap*>(parent);
-        } else if (parent->asSemanticTag()) {
-            parentItem = static_cast<IncompleteSemanticTag*>(parent);
+            static_cast<IncompleteMap*>(parent)->add(std::move(item));
+        } else if (parent->type() == SEMANTIC) {
+            static_cast<IncompleteSemantic*>(parent)->add(std::move(item));
         } else {
             CHECK(false);  // Impossible to get here.
         }
-        parentItem->add(std::move(item));
     }
 
     std::unique_ptr<Item> mTheItem;
