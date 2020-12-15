@@ -63,7 +63,7 @@ class Bool;
 class Array;
 class Map;
 class Null;
-class Semantic;
+class SemanticTag;
 class EncodedItem;
 
 /**
@@ -128,8 +128,39 @@ class Item {
     const Map* asMap() const { return const_cast<Item*>(this)->asMap(); }
     virtual Array* asArray() { return nullptr; }
     const Array* asArray() const { return const_cast<Item*>(this)->asArray(); }
-    virtual Semantic* asSemantic() { return nullptr; }
-    const Semantic* asSemantic() const { return const_cast<Item*>(this)->asSemantic(); }
+
+    // Like those above, these methods safely downcast an Item when it's actually a SemanticTag.
+    // However, if you think you want to use these methods, you probably don't.  Typically, the way
+    // you should handle tagged Items is by calling the appropriate method above (e.g. asInt())
+    // which will return a pointer to the tagged Item, rather than the tag itself.  If you want to
+    // find out if the Item* you're holding is to something with one or more tags applied, see
+    // semanticTagCount() and semanticTag() below.
+    virtual SemanticTag* asSemanticTag() { return nullptr; }
+    const SemanticTag* asSemanticTag() const { return const_cast<Item*>(this)->asSemanticTag(); }
+
+    /**
+     * Returns the number of semantic tags prefixed to this Item.
+     */
+    virtual size_t semanticTagCount() const { return 0; }
+
+    /**
+     * Returns the semantic tag at the specified nesting level `nesting`, iff `nesting` is less than
+     * the value returned by semanticTagCount().
+     *
+     * CBOR tags are "nested" by applying them in sequence.  The "rightmost" tag is the "inner" tag.
+     * That is, given:
+     *
+     *     4(5(6("AES"))) which encodes as C1 C2 C3 63 414553
+     *
+     * The tstr "AES" is tagged with 6.  The combined entity ("AES" tagged with 6) is tagged with 5,
+     * etc.  So in this example, semanticTagCount() would return 3, and semanticTag(0) would return
+     * 5 semanticTag(1) would return 5 and semanticTag(2) would return 4.  For values of n > 2,
+     * semanticTag(n) will return 0, but this is a meaningless value.
+     *
+     * If this layering is confusing, you probably don't have to worry about it. Nested tagging does
+     * not appear to be common, so semanticTag(0) is the only one you'll use.
+     */
+    virtual uint64_t semanticTag(size_t /* nesting */ = 0) const { return 0; }
 
     /**
      * Returns true if this is a "compound" item, i.e. one that contains one or more other items.
@@ -614,64 +645,58 @@ class Map : public Item {
     bool mCanonicalized = false;
 };
 
-class Semantic : public Item {
+class SemanticTag : public Item {
   public:
     static constexpr MajorType kMajorType = SEMANTIC;
 
     template <typename T>
-    explicit Semantic(uint64_t value, T&& child);
+    SemanticTag(uint64_t tagValue, T&& taggedItem);
+    SemanticTag(const SemanticTag& other) = delete;
+    SemanticTag(SemanticTag&&) = default;
+    SemanticTag& operator=(const SemanticTag& other) = delete;
+    SemanticTag& operator=(SemanticTag&&) = default;
 
-    Semantic(const Semantic& other) = delete;
-    Semantic(Semantic&&) = default;
-    Semantic& operator=(const Semantic& other) = delete;
-    Semantic& operator=(Semantic&&) = default;
-
-    bool operator==(const Semantic& other) const&;
+    bool operator==(const SemanticTag& other) const& {
+        return mValue == other.mValue && *mTaggedItem == *other.mTaggedItem;
+    }
 
     bool isCompound() const override { return true; }
 
-    virtual size_t size() const {
-        assertInvariant();
-        return 1;
-    }
+    virtual size_t size() const { return 1; }
 
-    size_t encodedSize() const override {
-        return std::accumulate(mEntries.begin(), mEntries.end(), headerSize(mValue),
-                               [](size_t sum, auto& entry) { return sum + entry->encodedSize(); });
-    }
+    // Encoding returns the tag + enclosed Item.
+    size_t encodedSize() const override { return headerSize(mValue) + mTaggedItem->encodedSize(); }
 
     using Item::encode;  // Make base versions visible.
     uint8_t* encode(uint8_t* pos, const uint8_t* end) const override;
     void encode(EncodeCallback encodeCallback) const override;
 
-    MajorType type() const override { return kMajorType; }
-    Semantic* asSemantic() override { return this; }
+    // type() is a bit special.  In normal usage it should return the wrapped type, but during
+    // parsing when we haven't yet parsed the tagged item, it needs to return SEMANTIC.
+    MajorType type() const override { return mTaggedItem ? mTaggedItem->type() : SEMANTIC; }
+    SemanticTag* asSemanticTag() override { return this; }
 
-    const std::unique_ptr<Item>& child() const {
-        assertInvariant();
-        return mEntries[0];
-    }
+    // Type information reflects the enclosed Item.  Note that if the immediately-enclosed Item is
+    // another tag, these methods will recurse down to the non-tag Item.
+    Int* asInt() override { return mTaggedItem->asInt(); }
+    Uint* asUint() override { return mTaggedItem->asUint(); }
+    Nint* asNint() override { return mTaggedItem->asNint(); }
+    Tstr* asTstr() override { return mTaggedItem->asTstr(); }
+    Bstr* asBstr() override { return mTaggedItem->asBstr(); }
+    Simple* asSimple() override { return mTaggedItem->asSimple(); }
+    Map* asMap() override { return mTaggedItem->asMap(); }
+    Array* asArray() override { return mTaggedItem->asArray(); }
 
-    std::unique_ptr<Item>& child() {
-        assertInvariant();
-        return mEntries[0];
-    }
+    std::unique_ptr<Item> clone() const override;
 
-    uint64_t value() const { return mValue; }
-
-    std::unique_ptr<Item> clone() const override {
-        assertInvariant();
-        return std::make_unique<Semantic>(mValue, mEntries[0]->clone());
-    }
+    size_t semanticTagCount() const override;
+    uint64_t semanticTag(size_t nesting = 0) const override;
 
   protected:
-    Semantic() = default;
-    Semantic(uint64_t value) : mValue(value) {}
+    SemanticTag() = default;
+    SemanticTag(uint64_t value) : mValue(value) {}
     uint64_t mValue;
-    std::vector<std::unique_ptr<Item>> mEntries;
-
-  private:
-    void assertInvariant() const;
+    std::unique_ptr<Item> mTaggedItem;
 };
 
 /**
@@ -955,9 +980,7 @@ const std::unique_ptr<Item>& Map::get(Key key) const {
 }
 
 template <typename T>
-Semantic::Semantic(uint64_t value, T&& child) : mValue(value) {
-    mEntries.reserve(1);
-    mEntries.push_back(details::makeItem(std::forward<T>(child)));
-}
+SemanticTag::SemanticTag(uint64_t value, T&& taggedItem)
+    : mValue(value), mTaggedItem(details::makeItem(std::forward<T>(taggedItem))) {}
 
 }  // namespace cppbor
