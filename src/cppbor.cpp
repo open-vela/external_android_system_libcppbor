@@ -98,7 +98,18 @@ bool prettyPrintInternal(const Item* item, string& out, size_t indent, size_t ma
 
     string indentString(indent, ' ');
 
+    size_t tagCount = item->semanticTagCount();
+    while (tagCount > 0) {
+        --tagCount;
+        snprintf(buf, sizeof(buf), "tag %" PRIu64 " ", item->semanticTag(tagCount));
+        out.append(buf);
+    }
+
     switch (item->type()) {
+        case SEMANTIC:
+            // Handled above.
+            break;
+
         case UINT:
             snprintf(buf, sizeof(buf), "%" PRIu64, item->asUint()->unsignedValue());
             out.append(buf);
@@ -205,14 +216,6 @@ bool prettyPrintInternal(const Item* item, string& out, size_t indent, size_t ma
             }
         } break;
 
-        case SEMANTIC: {
-            const Semantic* semantic = item->asSemantic();
-            snprintf(buf, sizeof(buf), "tag %" PRIu64 " ", semantic->value());
-            out.append(buf);
-            prettyPrintInternal(semantic->child().get(), out, indent, maxBStrSize,
-                                mapKeysToNotPrint);
-        } break;
-
         case SIMPLE:
             const Bool* asBool = item->asSimple()->asBool();
             const Null* asNull = item->asSimple()->asNull();
@@ -313,7 +316,7 @@ bool Item::operator==(const Item& other) const& {
         case SIMPLE:
             return *asSimple() == *(other.asSimple());
         case SEMANTIC:
-            return *asSemantic() == *(other.asSemantic());
+            return *asSemanticTag() == *(other.asSemanticTag());
         default:
             CHECK(false);  // Impossible to get here.
             return false;
@@ -459,7 +462,9 @@ void recursivelyCanonicalize(std::unique_ptr<Item>& item) {
             return;
 
         case SEMANTIC:
-            recursivelyCanonicalize(item->asSemantic()->child());
+            // This can't happen.  SemanticTags delegate their type() method to the contained Item's
+            // type.
+            assert(false);
             return;
     }
 }
@@ -492,24 +497,45 @@ std::unique_ptr<Item> Map::clone() const {
     return res;
 }
 
-bool Semantic::operator==(const Semantic& other) const& {
-    assertInvariant();
-    return *mEntries.front() == *other.mEntries.front();
+std::unique_ptr<Item> SemanticTag::clone() const {
+    return std::make_unique<SemanticTag>(mValue, mTaggedItem->clone());
 }
 
-uint8_t* Semantic::encode(uint8_t* pos, const uint8_t* end) const {
-    pos = encodeHeader(value(), pos, end);
+uint8_t* SemanticTag::encode(uint8_t* pos, const uint8_t* end) const {
+    // Can't use the encodeHeader() method that calls type() to get the major type, since that will
+    // return the tagged Item's type.
+    pos = ::cppbor::encodeHeader(kMajorType, mValue, pos, end);
     if (!pos) return nullptr;
-    return mEntries.front()->encode(pos, end);
+    return mTaggedItem->encode(pos, end);
 }
 
-void Semantic::encode(EncodeCallback encodeCallback) const {
-    encodeHeader(value(), encodeCallback);
-    mEntries.front()->encode(encodeCallback);
+void SemanticTag::encode(EncodeCallback encodeCallback) const {
+    // Can't use the encodeHeader() method that calls type() to get the major type, since that will
+    // return the tagged Item's type.
+    ::cppbor::encodeHeader(kMajorType, mValue, encodeCallback);
+    mTaggedItem->encode(encodeCallback);
 }
 
-void Semantic::assertInvariant() const {
-    CHECK(mEntries.size() == 1);
+size_t SemanticTag::semanticTagCount() const {
+    size_t levelCount = 1;  // Count this level.
+    const SemanticTag* cur = this;
+    while (cur->mTaggedItem && (cur = cur->mTaggedItem->asSemanticTag()) != nullptr) ++levelCount;
+    return levelCount;
+}
+
+uint64_t SemanticTag::semanticTag(size_t nesting) const {
+    // Getting the value of a specific nested tag is a bit tricky, because we start with the outer
+    // tag and don't know how many are inside.  We count the number of nesting levels to find out
+    // how many there are in total, then to get the one we want we have to walk down levelCount -
+    // nesting steps.
+    size_t levelCount = semanticTagCount();
+    if (nesting >= levelCount) return 0;
+
+    levelCount -= nesting;
+    const SemanticTag* cur = this;
+    while (--levelCount > 0) cur = cur->mTaggedItem->asSemanticTag();
+
+    return cur->mValue;
 }
 
 string prettyPrint(const Item* item, size_t maxBStrSize, const vector<string>& mapKeysToNotPrint) {
