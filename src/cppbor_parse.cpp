@@ -54,7 +54,7 @@ std::tuple<bool, uint64_t, const uint8_t*> parseLength(const uint8_t* pos, const
 }
 
 std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, const uint8_t* end,
-                                                          ParseClient* parseClient);
+                                                          bool emitViews, ParseClient* parseClient);
 
 std::tuple<const uint8_t*, ParseClient*> handleUint(uint64_t value, const uint8_t* hdrBegin,
                                                     const uint8_t* hdrEnd,
@@ -162,6 +162,7 @@ class IncompleteSemanticTag : public SemanticTag, public IncompleteItem {
 std::tuple<const uint8_t*, ParseClient*> handleEntries(size_t entryCount, const uint8_t* hdrBegin,
                                                        const uint8_t* pos, const uint8_t* end,
                                                        const std::string& typeName,
+                                                       bool emitViews,
                                                        ParseClient* parseClient) {
     while (entryCount > 0) {
         --entryCount;
@@ -169,7 +170,7 @@ std::tuple<const uint8_t*, ParseClient*> handleEntries(size_t entryCount, const 
             parseClient->error(hdrBegin, "Not enough entries for " + typeName + ".");
             return {hdrBegin, nullptr /* end parsing */};
         }
-        std::tie(pos, parseClient) = parseRecursively(pos, end, parseClient);
+        std::tie(pos, parseClient) = parseRecursively(pos, end, emitViews, parseClient);
         if (!parseClient) return {hdrBegin, nullptr};
     }
     return {pos, parseClient};
@@ -178,21 +179,21 @@ std::tuple<const uint8_t*, ParseClient*> handleEntries(size_t entryCount, const 
 std::tuple<const uint8_t*, ParseClient*> handleCompound(
         std::unique_ptr<Item> item, uint64_t entryCount, const uint8_t* hdrBegin,
         const uint8_t* valueBegin, const uint8_t* end, const std::string& typeName,
-        ParseClient* parseClient) {
+        bool emitViews, ParseClient* parseClient) {
     parseClient =
             parseClient->item(item, hdrBegin, valueBegin, valueBegin /* don't know the end yet */);
     if (!parseClient) return {hdrBegin, nullptr};
 
     const uint8_t* pos;
     std::tie(pos, parseClient) =
-            handleEntries(entryCount, hdrBegin, valueBegin, end, typeName, parseClient);
+            handleEntries(entryCount, hdrBegin, valueBegin, end, typeName, emitViews, parseClient);
     if (!parseClient) return {hdrBegin, nullptr};
 
     return {pos, parseClient->itemEnd(item, hdrBegin, valueBegin, pos)};
 }
 
 std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, const uint8_t* end,
-                                                          ParseClient* parseClient) {
+                                                          bool emitViews, ParseClient* parseClient) {
     const uint8_t* pos = begin;
 
     MajorType type = static_cast<MajorType>(*pos & 0xE0);
@@ -237,22 +238,30 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
             return handleNint(addlData, begin, pos, parseClient);
 
         case BSTR:
-            return handleString<Bstr>(addlData, begin, pos, end, "byte string", parseClient);
+            if (emitViews) {
+                return handleString<ViewBstr>(addlData, begin, pos, end, "byte string", parseClient);
+            } else {
+                return handleString<Bstr>(addlData, begin, pos, end, "byte string", parseClient);
+            }
 
         case TSTR:
-            return handleString<Tstr>(addlData, begin, pos, end, "text string", parseClient);
+            if (emitViews) {
+                return handleString<ViewTstr>(addlData, begin, pos, end, "text string", parseClient);
+            } else {
+                return handleString<Tstr>(addlData, begin, pos, end, "text string", parseClient);
+            }
 
         case ARRAY:
             return handleCompound(std::make_unique<IncompleteArray>(addlData), addlData, begin, pos,
-                                  end, "array", parseClient);
+                                  end, "array", emitViews, parseClient);
 
         case MAP:
             return handleCompound(std::make_unique<IncompleteMap>(addlData), addlData * 2, begin,
-                                  pos, end, "map", parseClient);
+                                  pos, end, "map", emitViews, parseClient);
 
         case SEMANTIC:
             return handleCompound(std::make_unique<IncompleteSemanticTag>(addlData), 1, begin, pos,
-                                  end, "semantic", parseClient);
+                                  end, "semantic", emitViews, parseClient);
 
         case SIMPLE:
             switch (addlData) {
@@ -346,7 +355,7 @@ class FullParseClient : public ParseClient {
 }  // anonymous namespace
 
 void parse(const uint8_t* begin, const uint8_t* end, ParseClient* parseClient) {
-    parseRecursively(begin, end, parseClient);
+    parseRecursively(begin, end, false, parseClient);
 }
 
 std::tuple<std::unique_ptr<Item> /* result */, const uint8_t* /* newPos */,
@@ -354,6 +363,18 @@ std::tuple<std::unique_ptr<Item> /* result */, const uint8_t* /* newPos */,
 parse(const uint8_t* begin, const uint8_t* end) {
     FullParseClient parseClient;
     parse(begin, end, &parseClient);
+    return parseClient.parseResult();
+}
+
+void parseWithViews(const uint8_t* begin, const uint8_t* end, ParseClient* parseClient) {
+    parseRecursively(begin, end, true, parseClient);
+}
+
+std::tuple<std::unique_ptr<Item> /* result */, const uint8_t* /* newPos */,
+           std::string /* errMsg */>
+parseWithViews(const uint8_t* begin, const uint8_t* end) {
+    FullParseClient parseClient;
+    parseWithViews(begin, end, &parseClient);
     return parseClient.parseResult();
 }
 
