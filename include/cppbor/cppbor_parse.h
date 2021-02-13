@@ -37,6 +37,24 @@ using ParseResult = std::tuple<std::unique_ptr<Item> /* result */, const uint8_t
 ParseResult parse(const uint8_t* begin, const uint8_t* end);
 
 /**
+ * Parse the first CBOR data item (possibly compound) from the range [begin, end).
+ *
+ * Returns a tuple of Item pointer, buffer pointer and error message.  If parsing is successful, the
+ * Item pointer is non-null, the buffer pointer points to the first byte after the
+ * successfully-parsed item and the error message string is empty.  If parsing fails, the Item
+ * pointer is null, the buffer pointer points to the first byte that was unparseable (the first byte
+ * of a data item header that is malformed in some way, e.g. an invalid value, or a length that is
+ * too large for the remaining buffer, etc.) and the string contains an error message describing the
+ * problem encountered.
+ *
+ * The returned CBOR data item will contain View* items backed by
+ * std::string_view types over the input range.
+ * WARNING! If the input range changes underneath, the corresponding views will
+ * carry the same change.
+ */
+ParseResult parseWithViews(const uint8_t* begin, const uint8_t* end);
+
+/**
  * Parse the first CBOR data item (possibly compound) from the byte vector.
  *
  * Returns a tuple of Item pointer, buffer pointer and error message.  If parsing is successful, the
@@ -67,6 +85,26 @@ inline ParseResult parse(const uint8_t* begin, size_t size) {
 }
 
 /**
+ * Parse the first CBOR data item (possibly compound) from the range [begin, begin + size).
+ *
+ * Returns a tuple of Item pointer, buffer pointer and error message.  If parsing is successful, the
+ * Item pointer is non-null, the buffer pointer points to the first byte after the
+ * successfully-parsed item and the error message string is empty.  If parsing fails, the Item
+ * pointer is null, the buffer pointer points to the first byte that was unparseable (the first byte
+ * of a data item header that is malformed in some way, e.g. an invalid value, or a length that is
+ * too large for the remaining buffer, etc.) and the string contains an error message describing the
+ * problem encountered.
+ *
+ * The returned CBOR data item will contain View* items backed by
+ * std::string_view types over the input range.
+ * WARNING! If the input range changes underneath, the corresponding views will
+ * carry the same change.
+ */
+inline ParseResult parseWithViews(const uint8_t* begin, size_t size) {
+    return parseWithViews(begin, begin + size);
+}
+
+/**
  * Parse the first CBOR data item (possibly compound) from the value contained in a Bstr.
  *
  * Returns a tuple of Item pointer, buffer pointer and error message.  If parsing is successful, the
@@ -90,6 +128,13 @@ class ParseClient;
  * provided ParseClient when elements are found.
  */
 void parse(const uint8_t* begin, const uint8_t* end, ParseClient* parseClient);
+
+/**
+ * Parse the CBOR data in the range [begin, end) in streaming fashion, calling methods on the
+ * provided ParseClient when elements are found. Uses the View* item types
+ * instead of the copying ones.
+ */
+void parseWithViews(const uint8_t* begin, const uint8_t* end, ParseClient* parseClient);
 
 /**
  * Parse the CBOR data in the vector in streaming fashion, calling methods on the

@@ -121,27 +121,41 @@ bool prettyPrintInternal(const Item* item, string& out, size_t indent, size_t ma
             break;
 
         case BSTR: {
+            const uint8_t* valueData;
+            size_t valueSize;
             const Bstr* bstr = item->asBstr();
-            const vector<uint8_t>& value = bstr->value();
-            if (value.size() > maxBStrSize) {
+            if (bstr != nullptr) {
+                const vector<uint8_t>& value = bstr->value();
+                valueData = value.data();
+                valueSize = value.size();
+            } else {
+                const ViewBstr* viewBstr = item->asViewBstr();
+                assert(viewBstr != nullptr);
+
+                std::basic_string_view view = viewBstr->view();
+                valueData = view.data();
+                valueSize = view.size();
+            }
+
+            if (valueSize > maxBStrSize) {
                 unsigned char digest[SHA_DIGEST_LENGTH];
                 SHA_CTX ctx;
                 SHA1_Init(&ctx);
-                SHA1_Update(&ctx, value.data(), value.size());
+                SHA1_Update(&ctx, valueData, valueSize);
                 SHA1_Final(digest, &ctx);
                 char buf2[SHA_DIGEST_LENGTH * 2 + 1];
                 for (size_t n = 0; n < SHA_DIGEST_LENGTH; n++) {
                     snprintf(buf2 + n * 2, 3, "%02x", digest[n]);
                 }
-                snprintf(buf, sizeof(buf), "<bstr size=%zd sha1=%s>", value.size(), buf2);
+                snprintf(buf, sizeof(buf), "<bstr size=%zd sha1=%s>", valueSize, buf2);
                 out.append(buf);
             } else {
                 out.append("{");
-                for (size_t n = 0; n < value.size(); n++) {
+                for (size_t n = 0; n < valueSize; n++) {
                     if (n > 0) {
                         out.append(", ");
                     }
-                    snprintf(buf, sizeof(buf), "0x%02x", value[n]);
+                    snprintf(buf, sizeof(buf), "0x%02x", valueData[n]);
                     out.append(buf);
                 }
                 out.append("}");
@@ -152,7 +166,13 @@ bool prettyPrintInternal(const Item* item, string& out, size_t indent, size_t ma
             out.append("'");
             {
                 // TODO: escape "'" characters
-                out.append(item->asTstr()->value().c_str());
+                if (item->asTstr() != nullptr) {
+                    out.append(item->asTstr()->value().c_str());
+                } else {
+                    const ViewTstr* viewTstr = item->asViewTstr();
+                    assert(viewTstr != nullptr);
+                    out.append(viewTstr->view());
+                }
             }
             out.append("'");
             break;
@@ -306,9 +326,26 @@ bool Item::operator==(const Item& other) const& {
         case NINT:
             return *asNint() == *(other.asNint());
         case BSTR:
-            return *asBstr() == *(other.asBstr());
+            if (asBstr() != nullptr && other.asBstr() != nullptr) {
+                return *asBstr() == *(other.asBstr());
+            }
+            if (asViewBstr() != nullptr && other.asViewBstr() != nullptr) {
+                return *asViewBstr() == *(other.asViewBstr());
+            }
+            // Interesting corner case: comparing a Bstr and ViewBstr with
+            // identical contents. The function currently returns false for
+            // this case.
+            // TODO: if it should return true, this needs a deep comparison
+            return false;
         case TSTR:
-            return *asTstr() == *(other.asTstr());
+            if (asTstr() != nullptr && other.asTstr() != nullptr) {
+                return *asTstr() == *(other.asTstr());
+            }
+            if (asViewTstr() != nullptr && other.asViewTstr() != nullptr) {
+                return *asViewTstr() == *(other.asViewTstr());
+            }
+            // Same corner case as Bstr
+            return false;
         case ARRAY:
             return *asArray() == *(other.asArray());
         case MAP:
@@ -353,6 +390,18 @@ void Bstr::encodeValue(EncodeCallback encodeCallback) const {
     }
 }
 
+uint8_t* ViewBstr::encode(uint8_t* pos, const uint8_t* end) const {
+    pos = encodeHeader(mView.size(), pos, end);
+    if (!pos || end - pos < static_cast<ptrdiff_t>(mView.size())) return nullptr;
+    return std::copy(mView.begin(), mView.end(), pos);
+}
+
+void ViewBstr::encodeValue(EncodeCallback encodeCallback) const {
+    for (auto c : mView) {
+        encodeCallback(static_cast<uint8_t>(c));
+    }
+}
+
 uint8_t* Tstr::encode(uint8_t* pos, const uint8_t* end) const {
     pos = encodeHeader(mValue.size(), pos, end);
     if (!pos || end - pos < static_cast<ptrdiff_t>(mValue.size())) return nullptr;
@@ -361,6 +410,18 @@ uint8_t* Tstr::encode(uint8_t* pos, const uint8_t* end) const {
 
 void Tstr::encodeValue(EncodeCallback encodeCallback) const {
     for (auto c : mValue) {
+        encodeCallback(static_cast<uint8_t>(c));
+    }
+}
+
+uint8_t* ViewTstr::encode(uint8_t* pos, const uint8_t* end) const {
+    pos = encodeHeader(mView.size(), pos, end);
+    if (!pos || end - pos < static_cast<ptrdiff_t>(mView.size())) return nullptr;
+    return std::copy(mView.begin(), mView.end(), pos);
+}
+
+void ViewTstr::encodeValue(EncodeCallback encodeCallback) const {
+    for (auto c : mView) {
         encodeCallback(static_cast<uint8_t>(c));
     }
 }

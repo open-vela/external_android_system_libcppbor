@@ -153,6 +153,31 @@ TEST(SimpleValueTest, NestedSemanticTagEncoding) {
               tripleTagged.toString());
 }
 
+TEST(SimpleValueTest, ViewByteStringEncodings) {
+    EXPECT_EQ("\x40", ViewBstr("").toString());
+    EXPECT_EQ("\x41\x61", ViewBstr("a").toString());
+    EXPECT_EQ("\x41\x41", ViewBstr("A").toString());
+    EXPECT_EQ("\x44\x49\x45\x54\x46", ViewBstr("IETF").toString());
+    EXPECT_EQ("\x42\x22\x5c", ViewBstr("\"\\").toString());
+    EXPECT_EQ("\x42\xc3\xbc", ViewBstr("\xc3\xbc").toString());
+    EXPECT_EQ("\x43\xe6\xb0\xb4", ViewBstr("\xe6\xb0\xb4").toString());
+    EXPECT_EQ("\x44\xf0\x90\x85\x91", ViewBstr("\xf0\x90\x85\x91").toString());
+    EXPECT_EQ("\x44\x01\x02\x03\x04", ViewBstr("\x01\x02\x03\x04").toString());
+    EXPECT_EQ("\x44\x40\x40\x40\x40", ViewBstr("@@@@").toString());
+}
+
+TEST(SimpleValueTest, ViewTextStringEncodings) {
+    EXPECT_EQ("\x60"s, ViewTstr("").toString());
+    EXPECT_EQ("\x61\x61"s, ViewTstr("a").toString());
+    EXPECT_EQ("\x61\x41"s, ViewTstr("A").toString());
+    EXPECT_EQ("\x64\x49\x45\x54\x46"s, ViewTstr("IETF").toString());
+    EXPECT_EQ("\x62\x22\x5c"s, ViewTstr("\"\\").toString());
+    EXPECT_EQ("\x62\xc3\xbc"s, ViewTstr("\xc3\xbc").toString());
+    EXPECT_EQ("\x63\xe6\xb0\xb4"s, ViewTstr("\xe6\xb0\xb4").toString());
+    EXPECT_EQ("\x64\xf0\x90\x85\x91"s, ViewTstr("\xf0\x90\x85\x91").toString());
+    EXPECT_EQ("\x64\x01\x02\x03\x04"s, ViewTstr("\x01\x02\x03\x04").toString());
+}
+
 TEST(IsIteratorPairOverTest, All) {
     EXPECT_TRUE((
             details::is_iterator_pair_over<pair<string::iterator, string::iterator>, char>::value));
@@ -505,6 +530,8 @@ TEST(EqualityTest, Uint) {
     EXPECT_NE(val, Bool(false));
     EXPECT_NE(val, Array(99, 1));
     EXPECT_NE(val, Map(99, 1));
+    EXPECT_NE(val, ViewTstr("99"));
+    EXPECT_NE(val, ViewBstr("99"));
 }
 
 TEST(EqualityTest, Nint) {
@@ -518,6 +545,8 @@ TEST(EqualityTest, Nint) {
     EXPECT_NE(val, Bool(false));
     EXPECT_NE(val, Array(99));
     EXPECT_NE(val, Map(99, 1));
+    EXPECT_NE(val, ViewTstr("99"));
+    EXPECT_NE(val, ViewBstr("99"));
 }
 
 TEST(EqualityTest, Tstr) {
@@ -532,6 +561,8 @@ TEST(EqualityTest, Tstr) {
     EXPECT_NE(val, Bool(false));
     EXPECT_NE(val, Array(99, 1));
     EXPECT_NE(val, Map(99, 1));
+    EXPECT_NE(val, ViewTstr("99"));
+    EXPECT_NE(val, ViewBstr("99"));
 }
 
 TEST(EqualityTest, Bstr) {
@@ -546,6 +577,8 @@ TEST(EqualityTest, Bstr) {
     EXPECT_NE(val, Bool(false));
     EXPECT_NE(val, Array(99, 1));
     EXPECT_NE(val, Map(99, 1));
+    EXPECT_NE(val, ViewTstr("99"));
+    EXPECT_NE(val, ViewBstr("99"));
 }
 
 TEST(EqualityTest, Bool) {
@@ -560,6 +593,8 @@ TEST(EqualityTest, Bool) {
     EXPECT_NE(val, Bool(true));
     EXPECT_NE(val, Array(99, 1));
     EXPECT_NE(val, Map(99, 1));
+    EXPECT_NE(val, ViewTstr("99"));
+    EXPECT_NE(val, ViewBstr("98"));
 }
 
 TEST(EqualityTest, Array) {
@@ -576,6 +611,8 @@ TEST(EqualityTest, Array) {
     EXPECT_NE(val, Array(98, 1));
     EXPECT_NE(val, Array(99, 1, 2));
     EXPECT_NE(val, Map(99, 1));
+    EXPECT_NE(val, ViewTstr("99"));
+    EXPECT_NE(val, ViewBstr("98"));
 }
 
 TEST(EqualityTest, Map) {
@@ -591,6 +628,8 @@ TEST(EqualityTest, Map) {
     EXPECT_NE(val, Array(99, 1));
     EXPECT_NE(val, Map(99, 2));
     EXPECT_NE(val, Map(99, 1, 99, 2));
+    EXPECT_NE(val, ViewTstr("99"));
+    EXPECT_NE(val, ViewBstr("98"));
 }
 
 TEST(EqualityTest, Null) {
@@ -606,6 +645,8 @@ TEST(EqualityTest, Null) {
     EXPECT_NE(val, Array(99, 1));
     EXPECT_NE(val, Map(99, 2));
     EXPECT_NE(val, Map(99, 1, 99, 2));
+    EXPECT_NE(val, ViewTstr("99"));
+    EXPECT_NE(val, ViewBstr("98"));
 }
 
 TEST(EqualityTest, SemanticTag) {
@@ -636,6 +677,40 @@ TEST(EqualityTest, NestedSemanticTag) {
     EXPECT_NE(val, Array(99, 1));
     EXPECT_NE(val, Map(99, 2));
     EXPECT_NE(val, Null());
+    EXPECT_NE(val, ViewTstr("99"));
+    EXPECT_NE(val, ViewBstr("98"));
+}
+
+TEST(EqualityTest, ViewTstr) {
+    ViewTstr val("99");
+    EXPECT_EQ(val, ViewTstr("99"));
+
+    EXPECT_NE(val, Uint(99));
+    EXPECT_NE(val, Nint(-1));
+    EXPECT_NE(val, Nint(-4));
+    EXPECT_NE(val, Tstr("99"));
+    EXPECT_NE(val, Bstr("99"));
+    EXPECT_NE(val, Bool(false));
+    EXPECT_NE(val, Array(99, 1));
+    EXPECT_NE(val, Map(99, 1));
+    EXPECT_NE(val, ViewTstr("98"));
+    EXPECT_NE(val, ViewBstr("99"));
+}
+
+TEST(EqualityTest, ViewBstr) {
+    ViewBstr val("99");
+    EXPECT_EQ(val, ViewBstr("99"));
+
+    EXPECT_NE(val, Uint(99));
+    EXPECT_NE(val, Nint(-1));
+    EXPECT_NE(val, Nint(-4));
+    EXPECT_NE(val, Tstr("99"));
+    EXPECT_NE(val, Bstr("99"));
+    EXPECT_NE(val, Bool(false));
+    EXPECT_NE(val, Array(99, 1));
+    EXPECT_NE(val, Map(99, 1));
+    EXPECT_NE(val, ViewTstr("99"));
+    EXPECT_NE(val, ViewBstr("98"));
 }
 
 TEST(ConvertTest, Uint) {
@@ -650,6 +725,8 @@ TEST(ConvertTest, Uint) {
     EXPECT_EQ(nullptr, item->asSimple());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
+    EXPECT_EQ(nullptr, item->asViewTstr());
+    EXPECT_EQ(nullptr, item->asViewBstr());
 
     EXPECT_EQ(10, item->asInt()->value());
     EXPECT_EQ(10, item->asUint()->value());
@@ -667,6 +744,8 @@ TEST(ConvertTest, Nint) {
     EXPECT_EQ(nullptr, item->asSimple());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
+    EXPECT_EQ(nullptr, item->asViewTstr());
+    EXPECT_EQ(nullptr, item->asViewBstr());
 
     EXPECT_EQ(-10, item->asInt()->value());
     EXPECT_EQ(-10, item->asNint()->value());
@@ -684,6 +763,8 @@ TEST(ConvertTest, Tstr) {
     EXPECT_EQ(nullptr, item->asSimple());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
+    EXPECT_EQ(nullptr, item->asViewTstr());
+    EXPECT_EQ(nullptr, item->asViewBstr());
 
     EXPECT_EQ("hello"s, item->asTstr()->value());
 }
@@ -701,6 +782,8 @@ TEST(ConvertTest, Bstr) {
     EXPECT_EQ(nullptr, item->asSimple());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
+    EXPECT_EQ(nullptr, item->asViewTstr());
+    EXPECT_EQ(nullptr, item->asViewBstr());
 
     EXPECT_EQ(vec, item->asBstr()->value());
 }
@@ -717,6 +800,8 @@ TEST(ConvertTest, Bool) {
     EXPECT_NE(nullptr, item->asSimple());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
+    EXPECT_EQ(nullptr, item->asViewTstr());
+    EXPECT_EQ(nullptr, item->asViewBstr());
 
     EXPECT_EQ(BOOLEAN, item->asSimple()->simpleType());
     EXPECT_NE(nullptr, item->asSimple()->asBool());
@@ -737,6 +822,8 @@ TEST(ConvertTest, Map) {
     EXPECT_EQ(nullptr, item->asSimple());
     EXPECT_NE(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
+    EXPECT_EQ(nullptr, item->asViewTstr());
+    EXPECT_EQ(nullptr, item->asViewBstr());
 
     EXPECT_EQ(0U, item->asMap()->size());
 }
@@ -753,6 +840,8 @@ TEST(ConvertTest, Array) {
     EXPECT_EQ(nullptr, item->asSimple());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_NE(nullptr, item->asArray());
+    EXPECT_EQ(nullptr, item->asViewTstr());
+    EXPECT_EQ(nullptr, item->asViewBstr());
 
     EXPECT_EQ(0U, item->asArray()->size());
 }
@@ -768,6 +857,8 @@ TEST(ConvertTest, SemanticTag) {
     EXPECT_EQ(nullptr, item->asSimple());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
+    EXPECT_EQ(nullptr, item->asViewTstr());
+    EXPECT_EQ(nullptr, item->asViewBstr());
 
     // Both asTstr() (the contained type) and asSemanticTag() return non-null.
     EXPECT_NE(nullptr, item->asTstr());
@@ -794,6 +885,8 @@ TEST(ConvertTest, NestedSemanticTag) {
     EXPECT_EQ(nullptr, item->asSimple());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
+    EXPECT_EQ(nullptr, item->asViewTstr());
+    EXPECT_EQ(nullptr, item->asViewBstr());
 
     // Both asTstr() (the contained type) and asSemanticTag() return non-null.
     EXPECT_NE(nullptr, item->asTstr());
@@ -823,10 +916,50 @@ TEST(ConvertTest, Null) {
     EXPECT_NE(nullptr, item->asSimple());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
+    EXPECT_EQ(nullptr, item->asViewTstr());
+    EXPECT_EQ(nullptr, item->asViewBstr());
 
     EXPECT_EQ(NULL_T, item->asSimple()->simpleType());
     EXPECT_EQ(nullptr, item->asSimple()->asBool());
     EXPECT_NE(nullptr, item->asSimple()->asNull());
+}
+
+TEST(ConvertTest, ViewTstr) {
+    unique_ptr<Item> item = details::makeItem(ViewTstr("hello"));
+
+    EXPECT_EQ(TSTR, item->type());
+    EXPECT_EQ(nullptr, item->asInt());
+    EXPECT_EQ(nullptr, item->asUint());
+    EXPECT_EQ(nullptr, item->asNint());
+    EXPECT_EQ(nullptr, item->asTstr());
+    EXPECT_EQ(nullptr, item->asBstr());
+    EXPECT_EQ(nullptr, item->asSimple());
+    EXPECT_EQ(nullptr, item->asMap());
+    EXPECT_EQ(nullptr, item->asArray());
+    EXPECT_NE(nullptr, item->asViewTstr());
+    EXPECT_EQ(nullptr, item->asViewBstr());
+
+    EXPECT_EQ("hello"sv, item->asViewTstr()->view());
+}
+
+TEST(ConvertTest, ViewBstr) {
+    array<uint8_t, 3> vec{0x23, 0x24, 0x22};
+    basic_string_view sv(vec.data(), vec.size());
+    unique_ptr<Item> item = details::makeItem(ViewBstr(sv));
+
+    EXPECT_EQ(BSTR, item->type());
+    EXPECT_EQ(nullptr, item->asInt());
+    EXPECT_EQ(nullptr, item->asUint());
+    EXPECT_EQ(nullptr, item->asNint());
+    EXPECT_EQ(nullptr, item->asTstr());
+    EXPECT_EQ(nullptr, item->asBstr());
+    EXPECT_EQ(nullptr, item->asSimple());
+    EXPECT_EQ(nullptr, item->asMap());
+    EXPECT_EQ(nullptr, item->asArray());
+    EXPECT_EQ(nullptr, item->asViewTstr());
+    EXPECT_NE(nullptr, item->asViewBstr());
+
+    EXPECT_EQ(sv, item->asViewBstr()->view());
 }
 
 TEST(CloningTest, Uint) {
@@ -935,6 +1068,26 @@ TEST(CloningTest, NestedSemanticTag) {
     EXPECT_NE(clone->asSemanticTag(), nullptr);
     EXPECT_EQ(item, *clone->asSemanticTag());
     EXPECT_EQ(*clone->asSemanticTag(), copy);
+}
+
+TEST(CloningTest, ViewTstr) {
+    ViewTstr item("qwertyasdfgh");
+    auto clone = item.clone();
+    EXPECT_EQ(clone->type(), TSTR);
+    EXPECT_NE(clone->asViewTstr(), nullptr);
+    EXPECT_EQ(item, *clone->asViewTstr());
+    EXPECT_EQ(*clone->asViewTstr(), ViewTstr("qwertyasdfgh"));
+}
+
+TEST(CloningTest, ViewBstr) {
+    array<uint8_t, 5> vec{1, 2, 3, 255, 0};
+    basic_string_view sv(vec.data(), vec.size());
+    ViewBstr item(sv);
+    auto clone = item.clone();
+    EXPECT_EQ(clone->type(), BSTR);
+    EXPECT_NE(clone->asViewBstr(), nullptr);
+    EXPECT_EQ(item, *clone->asViewBstr());
+    EXPECT_EQ(*clone->asViewBstr(), ViewBstr(sv));
 }
 
 TEST(PrettyPrintingTest, NestedSemanticTag) {
@@ -1363,6 +1516,36 @@ TEST(StreamParseTest, Map) {
     parse(encoded.data(), encoded.data() + encoded.size(), &mpc);
 }
 
+TEST(StreamParseTest, ViewTstr) {
+    MockParseClient mpc;
+
+    ViewTstr val("Hello");
+    auto encoded = val.encode();
+    uint8_t* encBegin = encoded.data();
+    uint8_t* encEnd = encoded.data() + encoded.size();
+
+    EXPECT_CALL(mpc, item(MatchesItem(val), encBegin, encBegin + 1, encEnd)).WillOnce(Return(&mpc));
+    EXPECT_CALL(mpc, itemEnd(_, _, _, _)).Times(0);
+    EXPECT_CALL(mpc, error(_, _)).Times(0);
+
+    parseWithViews(encoded.data(), encoded.data() + encoded.size(), &mpc);
+}
+
+TEST(StreamParseTest, ViewBstr) {
+    MockParseClient mpc;
+
+    ViewBstr val("Hello");
+    auto encoded = val.encode();
+    uint8_t* encBegin = encoded.data();
+    uint8_t* encEnd = encoded.data() + encoded.size();
+
+    EXPECT_CALL(mpc, item(MatchesItem(val), encBegin, encBegin + 1, encEnd)).WillOnce(Return(&mpc));
+    EXPECT_CALL(mpc, itemEnd(_, _, _, _)).Times(0);
+    EXPECT_CALL(mpc, error(_, _)).Times(0);
+
+    parseWithViews(encoded.data(), encoded.data() + encoded.size(), &mpc);
+}
+
 TEST(FullParserTest, Uint) {
     Uint val(10);
 
@@ -1513,6 +1696,22 @@ TEST(FullParserTest, MapWithTruncatedEntry) {
     EXPECT_EQ(nullptr, item.get());
     EXPECT_EQ(encoding.data() + 3, pos);
     EXPECT_EQ("Need 4 byte(s) for length field, have 3.", message);
+}
+
+TEST(FullParserTest, ViewTstr) {
+    ViewTstr val("Hello");
+
+    auto enc = val.encode();
+    auto [item, pos, message] = parseWithViews(enc.data(), enc.size());
+    EXPECT_THAT(item, MatchesItem(val));
+}
+
+TEST(FullParserTest, ViewBstr) {
+    ViewBstr val("\x00\x01\x02"s);
+
+    auto enc = val.encode();
+    auto [item, pos, message] = parseWithViews(enc.data(), enc.size());
+    EXPECT_THAT(item, MatchesItem(val));
 }
 
 TEST(MapGetValueByKeyTest, Map) {
