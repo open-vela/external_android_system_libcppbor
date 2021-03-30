@@ -1734,6 +1734,24 @@ TEST(FullParserTest, IndefiniteArray) {
               message);
 }
 
+TEST(FullParserTest, UnassignedSimpleValue) {
+    vector<uint8_t> unassignedSimpleValue = {0xE5};
+
+    auto [item, pos, message] = parse(unassignedSimpleValue);
+    EXPECT_THAT(item, IsNull());
+    EXPECT_EQ(pos, unassignedSimpleValue.data());
+    EXPECT_EQ("Unsupported floating-point or simple value.", message);
+}
+
+TEST(FullParserTest, FloatingPointValue) {
+    vector<uint8_t> floatingPointValue = {0xFA, 0x12, 0x75, 0x34, 0x37};
+
+    auto [item, pos, message] = parse(floatingPointValue);
+    EXPECT_THAT(item, IsNull());
+    EXPECT_EQ(pos, floatingPointValue.data());
+    EXPECT_EQ("Unsupported floating-point or simple value.", message);
+}
+
 TEST(MapGetValueByKeyTest, Map) {
     Array compoundItem(1, 2, 3, 4, 5, Map(4, 5, "a", "b"));
     auto clone = compoundItem.clone();
