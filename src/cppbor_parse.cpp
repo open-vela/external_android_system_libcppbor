@@ -202,8 +202,13 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
 
     bool success = true;
     uint64_t addlData;
-    if (tagInt < ONE_BYTE_LENGTH || tagInt > EIGHT_BYTE_LENGTH) {
+    if (tagInt < ONE_BYTE_LENGTH) {
         addlData = tagInt;
+    } else if (tagInt > EIGHT_BYTE_LENGTH) {
+        parseClient->error(
+                begin,
+                "Reserved additional information value or unsupported indefinite length item.");
+        return {begin, nullptr};
     } else {
         switch (tagInt) {
             case ONE_BYTE_LENGTH:
