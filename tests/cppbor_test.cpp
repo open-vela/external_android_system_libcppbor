@@ -1714,6 +1714,26 @@ TEST(FullParserTest, ViewBstr) {
     EXPECT_THAT(item, MatchesItem(val));
 }
 
+TEST(FullParserTest, ReservedAdditionalInformation) {
+    vector<uint8_t> reservedVal = {0x1D};
+
+    auto [item, pos, message] = parse(reservedVal);
+    EXPECT_THAT(item, IsNull());
+    EXPECT_EQ(pos, reservedVal.data());
+    EXPECT_EQ("Reserved additional information value or unsupported indefinite length item.",
+              message);
+}
+
+TEST(FullParserTest, IndefiniteArray) {
+    vector<uint8_t> indefiniteArray = {0x7F};
+
+    auto [item, pos, message] = parse(indefiniteArray);
+    EXPECT_THAT(item, IsNull());
+    EXPECT_EQ(pos, indefiniteArray.data());
+    EXPECT_EQ("Reserved additional information value or unsupported indefinite length item.",
+              message);
+}
+
 TEST(MapGetValueByKeyTest, Map) {
     Array compoundItem(1, 2, 3, 4, 5, Map(4, 5, "a", "b"));
     auto clone = compoundItem.clone();
