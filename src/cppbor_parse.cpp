@@ -275,6 +275,9 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
                     return handleBool(addlData, begin, pos, parseClient);
                 case NULL_V:
                     return handleNull(begin, pos, parseClient);
+                default:
+                    parseClient->error(begin, "Unsupported floating-point or simple value.");
+                    return {begin, nullptr};
             }
     }
     CHECK(false);  // Impossible to get here.
