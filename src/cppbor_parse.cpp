@@ -71,7 +71,7 @@ std::tuple<const uint8_t*, ParseClient*> handleNint(uint64_t value, const uint8_
         parseClient->error(hdrBegin, "NINT values that don't fit in int64_t are not supported.");
         return {hdrBegin, nullptr /* end parsing */};
     }
-    std::unique_ptr<Item> item = std::make_unique<Nint>(-1 - static_cast<uint64_t>(value));
+    std::unique_ptr<Item> item = std::make_unique<Nint>(-1 - static_cast<int64_t>(value));
     return {hdrEnd,
             parseClient->item(item, hdrBegin, hdrEnd /* valueBegin */, hdrEnd /* itemEnd */)};
 }
