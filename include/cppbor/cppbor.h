@@ -285,7 +285,7 @@ class Int : public Item {
     bool operator==(const Int& other) const& { return value() == other.value(); }
 
     virtual int64_t value() const = 0;
-
+    using Item::asInt;
     Int* asInt() override { return this; }
 };
 
@@ -301,6 +301,7 @@ class Uint : public Int {
     bool operator==(const Uint& other) const& { return mValue == other.mValue; }
 
     MajorType type() const override { return kMajorType; }
+    using Item::asUint;
     Uint* asUint() override { return this; }
 
     size_t encodedSize() const override { return headerSize(mValue); }
@@ -339,6 +340,7 @@ class Nint : public Int {
     bool operator==(const Nint& other) const& { return mValue == other.mValue; }
 
     MajorType type() const override { return kMajorType; }
+    using Item::asNint;
     Nint* asNint() override { return this; }
     size_t encodedSize() const override { return headerSize(addlInfo()); }
 
@@ -397,6 +399,7 @@ class Bstr : public Item {
     bool operator==(const Bstr& other) const& { return mValue == other.mValue; }
 
     MajorType type() const override { return kMajorType; }
+    using Item::asBstr;
     Bstr* asBstr() override { return this; }
     size_t encodedSize() const override { return headerSize(mValue.size()) + mValue.size(); }
     using Item::encode;
@@ -447,6 +450,7 @@ class ViewBstr : public Item {
     bool operator==(const ViewBstr& other) const& { return mView == other.mView; }
 
     MajorType type() const override { return kMajorType; }
+    using Item::asViewBstr;
     ViewBstr* asViewBstr() override { return this; }
     size_t encodedSize() const override { return headerSize(mView.size()) + mView.size(); }
     using Item::encode;
@@ -497,6 +501,7 @@ class Tstr : public Item {
     bool operator==(const Tstr& other) const& { return mValue == other.mValue; }
 
     MajorType type() const override { return kMajorType; }
+    using Item::asTstr;
     Tstr* asTstr() override { return this; }
     size_t encodedSize() const override { return headerSize(mValue.size()) + mValue.size(); }
     using Item::encode;
@@ -544,6 +549,7 @@ class ViewTstr : public Item {
     bool operator==(const ViewTstr& other) const& { return mView == other.mView; }
 
     MajorType type() const override { return kMajorType; }
+    using Item::asViewTstr;
     ViewTstr* asViewTstr() override { return this; }
     size_t encodedSize() const override { return headerSize(mView.size()) + mView.size(); }
     using Item::encode;
@@ -619,6 +625,7 @@ class Array : public Item {
     std::unique_ptr<Item>& get(size_t index) { return mEntries[index]; }
 
     MajorType type() const override { return kMajorType; }
+    using Item::asArray;
     Array* asArray() override { return this; }
 
     std::unique_ptr<Item> clone() const override;
@@ -707,6 +714,7 @@ class Map : public Item {
     const auto& operator[](size_t index) const { return mEntries[index]; }
 
     MajorType type() const override { return kMajorType; }
+    using Item::asMap;
     Map* asMap() override { return this; }
 
     /**
@@ -778,19 +786,30 @@ class SemanticTag : public Item {
     // type() is a bit special.  In normal usage it should return the wrapped type, but during
     // parsing when we haven't yet parsed the tagged item, it needs to return SEMANTIC.
     MajorType type() const override { return mTaggedItem ? mTaggedItem->type() : SEMANTIC; }
+    using Item::asSemanticTag;
     SemanticTag* asSemanticTag() override { return this; }
 
     // Type information reflects the enclosed Item.  Note that if the immediately-enclosed Item is
     // another tag, these methods will recurse down to the non-tag Item.
+    using Item::asInt;
     Int* asInt() override { return mTaggedItem->asInt(); }
+    using Item::asUint;
     Uint* asUint() override { return mTaggedItem->asUint(); }
+    using Item::asNint;
     Nint* asNint() override { return mTaggedItem->asNint(); }
+    using Item::asTstr;
     Tstr* asTstr() override { return mTaggedItem->asTstr(); }
+    using Item::asBstr;
     Bstr* asBstr() override { return mTaggedItem->asBstr(); }
+    using Item::asSimple;
     Simple* asSimple() override { return mTaggedItem->asSimple(); }
+    using Item::asMap;
     Map* asMap() override { return mTaggedItem->asMap(); }
+    using Item::asArray;
     Array* asArray() override { return mTaggedItem->asArray(); }
+    using Item::asViewTstr;
     ViewTstr* asViewTstr() override { return mTaggedItem->asViewTstr(); }
+    using Item::asViewBstr;
     ViewBstr* asViewBstr() override { return mTaggedItem->asViewBstr(); }
 
     std::unique_ptr<Item> clone() const override;
