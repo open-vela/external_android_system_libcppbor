@@ -96,7 +96,8 @@ std::tuple<const uint8_t*, ParseClient*> handleString(uint64_t length, const uin
                                                       const uint8_t* valueBegin, const uint8_t* end,
                                                       const std::string& errLabel,
                                                       ParseClient* parseClient) {
-    if (end - valueBegin < static_cast<ssize_t>(length)) {
+    ssize_t signed_length = static_cast<ssize_t>(length);
+    if (end - valueBegin < signed_length || signed_length < 0) {
         parseClient->error(hdrBegin, insufficientLengthString(length, end - valueBegin, errLabel));
         return {hdrBegin, nullptr /* end parsing */};
     }
