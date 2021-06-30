@@ -24,10 +24,6 @@ MODULE_SRCS := \
 	$(LOCAL_DIR)/src/cppbor.cpp \
 	$(LOCAL_DIR)/src/cppbor_parse.cpp
 
-MODULE_EXPORT_INCLUDES += $(LOCAL_DIR)/include/cppbor/
+GLOBAL_INCLUDES += $(LOCAL_DIR)/include/cppbor/
 
-MODULE_LIBRARY_DEPS += \
-	trusty/user/base/lib/libstdc++-trusty \
-	external/boringssl \
-
-include make/library.mk
+include make/module.mk
