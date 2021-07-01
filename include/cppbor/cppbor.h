@@ -598,6 +598,13 @@ class Array : public Item {
     Array(Args&&... args);
 
     /**
+     * The above variadic constructor is disabled if sizeof(Args) != 1, so special
+     * case an explicit Array constructor for creating an Array with one Item.
+     */
+    template <typename T, typename Enable>
+    explicit Array(T&& v);
+
+    /**
      * Append a single element to the Array, of any compatible type.
      */
     template <typename T>
@@ -1039,12 +1046,19 @@ inline void map_helper(Map& map, Key&& key, Value&& value, Rest&&... rest) {
 }  // namespace details
 
 template <typename... Args,
-          /* Prevent use as copy ctor */ typename = std::enable_if_t<
-                  (sizeof...(Args)) != 1 ||
-                  !(std::is_same_v<Array, std::remove_cv_t<std::remove_reference_t<Args>>> || ...)>>
+         /* Prevent implicit construction with a single argument. */
+         typename = std::enable_if_t<(sizeof...(Args)) != 1>>
 Array::Array(Args&&... args) {
     mEntries.reserve(sizeof...(args));
     (mEntries.push_back(details::makeItem(std::forward<Args>(args))), ...);
+}
+
+template <typename T,
+         /* Prevent use as copy constructor. */
+         typename = std::enable_if_t<
+            !std::is_same_v<Array, std::remove_cv_t<std::remove_reference_t<T>>>>>
+Array::Array(T&& v) {
+    mEntries.push_back(details::makeItem(std::forward<T>(v)));
 }
 
 template <typename T>
