@@ -198,7 +198,7 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
     if (begin == end) {
         parseClient->error(
                 begin,
-                "Input buffer is empty.");
+                "Input buffer is empty. Begin and end cannot point to the same location.");
         return {begin, nullptr};
     }
 
