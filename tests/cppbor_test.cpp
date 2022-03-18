@@ -944,7 +944,7 @@ TEST(ConvertTest, ViewTstr) {
 
 TEST(ConvertTest, ViewBstr) {
     array<uint8_t, 3> vec{0x23, 0x24, 0x22};
-    basic_string_view sv(vec.data(), vec.size());
+    basic_string_view<uint8_t> sv(vec.data(), vec.size());
     unique_ptr<Item> item = details::makeItem(ViewBstr(sv));
 
     EXPECT_EQ(BSTR, item->type());
@@ -1081,7 +1081,7 @@ TEST(CloningTest, ViewTstr) {
 
 TEST(CloningTest, ViewBstr) {
     array<uint8_t, 5> vec{1, 2, 3, 255, 0};
-    basic_string_view sv(vec.data(), vec.size());
+    basic_string_view<uint8_t> sv(vec.data(), vec.size());
     ViewBstr item(sv);
     auto clone = item.clone();
     EXPECT_EQ(clone->type(), BSTR);
@@ -1707,11 +1707,14 @@ TEST(FullParserTest, ViewTstr) {
 }
 
 TEST(FullParserTest, ViewBstr) {
-    ViewBstr val("\x00\x01\x02"s);
+    const std::string strVal = "\x00\x01\x02"s;
+    const ViewBstr val(strVal);
+    EXPECT_EQ(val.toString(), "\x43\x00\x01\x02"s);
 
     auto enc = val.encode();
     auto [item, pos, message] = parseWithViews(enc.data(), enc.size());
     EXPECT_THAT(item, MatchesItem(val));
+    EXPECT_EQ(hexDump(item->toString()), hexDump(val.toString()));
 }
 
 TEST(FullParserTest, ReservedAdditionalInformation) {
