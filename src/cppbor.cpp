@@ -18,6 +18,7 @@
 
 #include <inttypes.h>
 #include <openssl/sha.h>
+#include <cstdint>
 
 #include "cppbor_parse.h"
 
