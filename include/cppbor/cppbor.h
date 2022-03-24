@@ -25,6 +25,20 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <algorithm>
+
+#ifdef OS_WINDOWS
+#include <basetsd.h>
+
+#define ssize_t SSIZE_T
+#endif // OS_WINDOWS
+
+#ifdef TRUE
+#undef TRUE
+#endif // TRUE
+#ifdef FALSE
+#undef FALSE
+#endif // FALSE
 
 namespace cppbor {
 
@@ -705,7 +719,7 @@ class Map : public Item {
      *
      * If the searched-for `key` is not present, returns `nullptr`.
      *
-     * Note that if the map is canonicalized (sorted), Map::get() peforms a binary search.  If your
+     * Note that if the map is canonicalized (sorted), Map::get() performs a binary search.  If your
      * map is large and you're searching in it many times, it may be worthwhile to canonicalize it
      * to make Map::get() faster.  Any use of a method that might modify the map disables the
      * speedup.
@@ -919,7 +933,7 @@ class Null : public Simple {
  * for unit tests.
  */
 std::string prettyPrint(const Item* item, size_t maxBStrSize = 32,
-                        const std::vector<std::string>& mapKeysNotToPrint = {});
+                        const std::vector<std::string>& mapKeysToNotPrint = {});
 
 /**
  * Returns pretty-printed CBOR for |value|.
@@ -934,7 +948,7 @@ std::string prettyPrint(const Item* item, size_t maxBStrSize = 32,
  * for unit tests.
  */
 std::string prettyPrint(const std::vector<uint8_t>& encodedCbor, size_t maxBStrSize = 32,
-                        const std::vector<std::string>& mapKeysNotToPrint = {});
+                        const std::vector<std::string>& mapKeysToNotPrint = {});
 
 /**
  * Details. Mostly you shouldn't have to look below, except perhaps at the docstring for makeItem.
