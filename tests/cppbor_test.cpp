@@ -721,6 +721,8 @@ TEST(ConvertTest, Uint) {
     EXPECT_EQ(nullptr, item->asTstr());
     EXPECT_EQ(nullptr, item->asBstr());
     EXPECT_EQ(nullptr, item->asSimple());
+    EXPECT_EQ(nullptr, item->asBool());
+    EXPECT_EQ(nullptr, item->asNull());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
     EXPECT_EQ(nullptr, item->asViewTstr());
@@ -740,6 +742,8 @@ TEST(ConvertTest, Nint) {
     EXPECT_EQ(nullptr, item->asTstr());
     EXPECT_EQ(nullptr, item->asBstr());
     EXPECT_EQ(nullptr, item->asSimple());
+    EXPECT_EQ(nullptr, item->asBool());
+    EXPECT_EQ(nullptr, item->asNull());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
     EXPECT_EQ(nullptr, item->asViewTstr());
@@ -759,6 +763,8 @@ TEST(ConvertTest, Tstr) {
     EXPECT_NE(nullptr, item->asTstr());
     EXPECT_EQ(nullptr, item->asBstr());
     EXPECT_EQ(nullptr, item->asSimple());
+    EXPECT_EQ(nullptr, item->asBool());
+    EXPECT_EQ(nullptr, item->asNull());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
     EXPECT_EQ(nullptr, item->asViewTstr());
@@ -778,6 +784,8 @@ TEST(ConvertTest, Bstr) {
     EXPECT_EQ(nullptr, item->asTstr());
     EXPECT_NE(nullptr, item->asBstr());
     EXPECT_EQ(nullptr, item->asSimple());
+    EXPECT_EQ(nullptr, item->asBool());
+    EXPECT_EQ(nullptr, item->asNull());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
     EXPECT_EQ(nullptr, item->asViewTstr());
@@ -796,15 +804,20 @@ TEST(ConvertTest, Bool) {
     EXPECT_EQ(nullptr, item->asTstr());
     EXPECT_EQ(nullptr, item->asBstr());
     EXPECT_NE(nullptr, item->asSimple());
+    EXPECT_NE(nullptr, item->asBool());
+    EXPECT_EQ(nullptr, item->asNull());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
     EXPECT_EQ(nullptr, item->asViewTstr());
     EXPECT_EQ(nullptr, item->asViewBstr());
 
     EXPECT_EQ(cppbor::BOOLEAN, item->asSimple()->simpleType());
+    EXPECT_NE(nullptr, item->asBool());
     EXPECT_NE(nullptr, item->asSimple()->asBool());
+    EXPECT_EQ(nullptr, item->asNull());
     EXPECT_EQ(nullptr, item->asSimple()->asNull());
 
+    EXPECT_FALSE(item->asBool()->value());
     EXPECT_FALSE(item->asSimple()->asBool()->value());
 }
 
@@ -818,6 +831,8 @@ TEST(ConvertTest, Map) {
     EXPECT_EQ(nullptr, item->asTstr());
     EXPECT_EQ(nullptr, item->asBstr());
     EXPECT_EQ(nullptr, item->asSimple());
+    EXPECT_EQ(nullptr, item->asBool());
+    EXPECT_EQ(nullptr, item->asNull());
     EXPECT_NE(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
     EXPECT_EQ(nullptr, item->asViewTstr());
@@ -836,6 +851,8 @@ TEST(ConvertTest, Array) {
     EXPECT_EQ(nullptr, item->asTstr());
     EXPECT_EQ(nullptr, item->asBstr());
     EXPECT_EQ(nullptr, item->asSimple());
+    EXPECT_EQ(nullptr, item->asBool());
+    EXPECT_EQ(nullptr, item->asNull());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_NE(nullptr, item->asArray());
     EXPECT_EQ(nullptr, item->asViewTstr());
@@ -853,6 +870,8 @@ TEST(ConvertTest, SemanticTag) {
     EXPECT_EQ(nullptr, item->asNint());
     EXPECT_EQ(nullptr, item->asBstr());
     EXPECT_EQ(nullptr, item->asSimple());
+    EXPECT_EQ(nullptr, item->asBool());
+    EXPECT_EQ(nullptr, item->asNull());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
     EXPECT_EQ(nullptr, item->asViewTstr());
@@ -881,6 +900,8 @@ TEST(ConvertTest, NestedSemanticTag) {
     EXPECT_EQ(nullptr, item->asNint());
     EXPECT_EQ(nullptr, item->asBstr());
     EXPECT_EQ(nullptr, item->asSimple());
+    EXPECT_EQ(nullptr, item->asBool());
+    EXPECT_EQ(nullptr, item->asNull());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
     EXPECT_EQ(nullptr, item->asViewTstr());
@@ -912,13 +933,17 @@ TEST(ConvertTest, Null) {
     EXPECT_EQ(nullptr, item->asTstr());
     EXPECT_EQ(nullptr, item->asBstr());
     EXPECT_NE(nullptr, item->asSimple());
+    EXPECT_EQ(nullptr, item->asBool());
+    EXPECT_NE(nullptr, item->asNull());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
     EXPECT_EQ(nullptr, item->asViewTstr());
     EXPECT_EQ(nullptr, item->asViewBstr());
 
     EXPECT_EQ(NULL_T, item->asSimple()->simpleType());
+    EXPECT_EQ(nullptr, item->asBool());
     EXPECT_EQ(nullptr, item->asSimple()->asBool());
+    EXPECT_NE(nullptr, item->asNull());
     EXPECT_NE(nullptr, item->asSimple()->asNull());
 }
 
@@ -932,6 +957,8 @@ TEST(ConvertTest, ViewTstr) {
     EXPECT_EQ(nullptr, item->asTstr());
     EXPECT_EQ(nullptr, item->asBstr());
     EXPECT_EQ(nullptr, item->asSimple());
+    EXPECT_EQ(nullptr, item->asBool());
+    EXPECT_EQ(nullptr, item->asNull());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
     EXPECT_NE(nullptr, item->asViewTstr());
@@ -952,6 +979,8 @@ TEST(ConvertTest, ViewBstr) {
     EXPECT_EQ(nullptr, item->asTstr());
     EXPECT_EQ(nullptr, item->asBstr());
     EXPECT_EQ(nullptr, item->asSimple());
+    EXPECT_EQ(nullptr, item->asBool());
+    EXPECT_EQ(nullptr, item->asNull());
     EXPECT_EQ(nullptr, item->asMap());
     EXPECT_EQ(nullptr, item->asArray());
     EXPECT_EQ(nullptr, item->asViewTstr());
@@ -1024,8 +1053,11 @@ TEST(CloningTest, Bool) {
     EXPECT_EQ(clone->type(), SIMPLE);
     EXPECT_NE(clone->asSimple(), nullptr);
     EXPECT_EQ(clone->asSimple()->simpleType(), cppbor::BOOLEAN);
+    EXPECT_NE(clone->asBool(), nullptr);
     EXPECT_NE(clone->asSimple()->asBool(), nullptr);
+    EXPECT_EQ(item, *clone->asBool());
     EXPECT_EQ(item, *clone->asSimple()->asBool());
+    EXPECT_EQ(*clone->asBool(), Bool(true));
     EXPECT_EQ(*clone->asSimple()->asBool(), Bool(true));
 }
 
