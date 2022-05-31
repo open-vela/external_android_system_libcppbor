@@ -142,6 +142,11 @@ class Item {
     const Bstr* asBstr() const { return const_cast<Item*>(this)->asBstr(); }
     virtual Simple* asSimple() { return nullptr; }
     const Simple* asSimple() const { return const_cast<Item*>(this)->asSimple(); }
+    virtual Bool* asBool() { return nullptr; }
+    const Bool* asBool() const { return const_cast<Item*>(this)->asBool(); }
+    virtual Null* asNull() { return nullptr; }
+    const Null* asNull() const { return const_cast<Item*>(this)->asNull(); }
+
     virtual Map* asMap() { return nullptr; }
     const Map* asMap() const { return const_cast<Item*>(this)->asMap(); }
     virtual Array* asArray() { return nullptr; }
@@ -859,9 +864,6 @@ class Simple : public Item {
     MajorType type() const override { return kMajorType; }
 
     Simple* asSimple() override { return this; }
-
-    virtual const Bool* asBool() const { return nullptr; };
-    virtual const Null* asNull() const { return nullptr; };
 };
 
 /**
@@ -877,7 +879,7 @@ class Bool : public Simple {
     bool operator==(const Bool& other) const& { return mValue == other.mValue; }
 
     SimpleType simpleType() const override { return kSimpleType; }
-    const Bool* asBool() const override { return this; }
+    Bool* asBool() override { return this; }
 
     size_t encodedSize() const override { return 1; }
 
@@ -907,7 +909,7 @@ class Null : public Simple {
     explicit Null() {}
 
     SimpleType simpleType() const override { return kSimpleType; }
-    const Null* asNull() const override { return this; }
+    Null* asNull() override { return this; }
 
     size_t encodedSize() const override { return 1; }
 
