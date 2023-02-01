@@ -55,7 +55,12 @@ cc_library {
     shared_libs: [
         "libbase",
         "libcrypto",
-    ]
+    ],
+    target: {
+        windows: {
+            enabled: true,
+        },
+    },
 }
 
 cc_test {
