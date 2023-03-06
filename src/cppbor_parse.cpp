@@ -16,11 +16,8 @@
 
 #include "cppbor_parse.h"
 
-#include <memory>
 #include <sstream>
 #include <stack>
-#include <type_traits>
-#include "cppbor.h"
 
 #ifndef __TRUSTY__
 #include <android-base/logging.h>
@@ -113,11 +110,8 @@ std::tuple<const uint8_t*, ParseClient*> handleString(uint64_t length, const uin
 
 class IncompleteItem {
   public:
-    static IncompleteItem* cast(Item* item);
-
     virtual ~IncompleteItem() {}
     virtual void add(std::unique_ptr<Item> item) = 0;
-    virtual std::unique_ptr<Item> finalize() && = 0;
 };
 
 class IncompleteArray : public Array, public IncompleteItem {
@@ -130,12 +124,6 @@ class IncompleteArray : public Array, public IncompleteItem {
     void add(std::unique_ptr<Item> item) override {
         mEntries.reserve(mSize);
         mEntries.push_back(std::move(item));
-    }
-
-    virtual std::unique_ptr<Item> finalize() && override {
-        // Use Array explicitly so the compiler picks the correct ctor overload
-        Array* thisArray = this;
-        return std::make_unique<Array>(std::move(*thisArray));
     }
 
   private:
@@ -158,10 +146,6 @@ class IncompleteMap : public Map, public IncompleteItem {
         }
     }
 
-    virtual std::unique_ptr<Item> finalize() && override {
-        return std::make_unique<Map>(std::move(*this));
-    }
-
   private:
     std::unique_ptr<Item> mKeyHeldForAdding;
     size_t mSize;
@@ -175,34 +159,7 @@ class IncompleteSemanticTag : public SemanticTag, public IncompleteItem {
     size_t size() const override { return 1; }
 
     void add(std::unique_ptr<Item> item) override { mTaggedItem = std::move(item); }
-
-    virtual std::unique_ptr<Item> finalize() && override {
-        return std::make_unique<SemanticTag>(std::move(*this));
-    }
 };
-
-IncompleteItem* IncompleteItem::cast(Item* item) {
-        CHECK(item->isCompound());
-        if (item->type() == ARRAY) {
-#if __has_feature(cxx_rtti)
-            CHECK(dynamic_cast<IncompleteArray*>(item));
-#endif
-            return static_cast<IncompleteArray*>(item);
-        } else if (item->type() == MAP) {
-#if __has_feature(cxx_rtti)
-            CHECK(dynamic_cast<IncompleteMap*>(item));
-#endif
-            return static_cast<IncompleteMap*>(item);
-        } else if (item->asSemanticTag()) {
-#if __has_feature(cxx_rtti)
-            CHECK(dynamic_cast<IncompleteSemanticTag*>(item));
-#endif
-            return static_cast<IncompleteSemanticTag*>(item);
-        } else {
-            CHECK(false);  // Impossible to get here.
-        }
-        return nullptr;
-    }
 
 std::tuple<const uint8_t*, ParseClient*> handleEntries(size_t entryCount, const uint8_t* hdrBegin,
                                                        const uint8_t* pos, const uint8_t* end,
@@ -364,15 +321,12 @@ class FullParseClient : public ParseClient {
         CHECK(item->isCompound() && item.get() == mParentStack.top());
         mParentStack.pop();
 
-        IncompleteItem* incompleteItem = IncompleteItem::cast(std::move(item).get());
-        std::unique_ptr<Item> finalizedItem = std::move(*incompleteItem).finalize();
-
         if (mParentStack.empty()) {
-            mTheItem = std::move(finalizedItem);
+            mTheItem = std::move(item);
             mPosition = end;
             return nullptr;  // We're done
         } else {
-            appendToLastParent(std::move(finalizedItem));
+            appendToLastParent(std::move(item));
             return this;
         }
     }
@@ -392,7 +346,21 @@ class FullParseClient : public ParseClient {
   private:
     void appendToLastParent(std::unique_ptr<Item> item) {
         auto parent = mParentStack.top();
-        IncompleteItem::cast(parent)->add(std::move(item));
+#if __has_feature(cxx_rtti)
+        assert(dynamic_cast<IncompleteItem*>(parent));
+#endif
+
+        IncompleteItem* parentItem{};
+        if (parent->type() == ARRAY) {
+            parentItem = static_cast<IncompleteArray*>(parent);
+        } else if (parent->type() == MAP) {
+            parentItem = static_cast<IncompleteMap*>(parent);
+        } else if (parent->asSemanticTag()) {
+            parentItem = static_cast<IncompleteSemanticTag*>(parent);
+        } else {
+            CHECK(false);  // Impossible to get here.
+        }
+        parentItem->add(std::move(item));
     }
 
     std::unique_ptr<Item> mTheItem;
