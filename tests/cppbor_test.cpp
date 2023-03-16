@@ -1642,6 +1642,21 @@ TEST(FullParserTest, Array) {
     EXPECT_EQ(arr[0]->asTstr()->value(), "hello");
 }
 
+TEST(FullParserTest, ArrayTooBigForMemory) {
+    vector<uint8_t> encoded = {
+      // Array with 2^64 - 1 data items.
+      0x9B, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+      // First item.
+      0x01,
+      // Rest of the items are missing.
+    };
+
+    auto [item, pos, message] = parse(encoded);
+    EXPECT_THAT(item, IsNull());
+    EXPECT_EQ(pos, encoded.data());
+    EXPECT_EQ(message, "Not enough entries for array.");
+}
+
 TEST(FullParserTest, MutableOutput) {
     Array nestedArray("pizza", 31415);
     Map nestedMap("array", std::move(nestedArray));
@@ -1680,6 +1695,21 @@ TEST(FullParserTest, Map) {
 
     auto [item, pos, message] = parse(val.encode());
     EXPECT_THAT(item, MatchesItem(ByRef(val)));
+}
+
+TEST(FullParserTest, MapTooBigForMemory) {
+    vector<uint8_t> encoded = {
+      // Map with 2^64 - 1 pairs of data items.
+      0xBB, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+      // First pair.
+      0x01, 0x01,
+      // Rest of the pairs are missing.
+    };
+
+    auto [item, pos, message] = parse(encoded);
+    EXPECT_THAT(item, IsNull());
+    EXPECT_EQ(pos, encoded.data());
+    EXPECT_EQ(message, "Not enough entries for map.");
 }
 
 TEST(FullParserTest, SemanticTag) {
