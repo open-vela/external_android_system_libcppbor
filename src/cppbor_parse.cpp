@@ -128,7 +128,6 @@ class IncompleteArray : public Array, public IncompleteItem {
     size_t size() const override { return mSize; }
 
     void add(std::unique_ptr<Item> item) override {
-        mEntries.reserve(mSize);
         mEntries.push_back(std::move(item));
     }
 
@@ -151,7 +150,6 @@ class IncompleteMap : public Map, public IncompleteItem {
 
     void add(std::unique_ptr<Item> item) override {
         if (mKeyHeldForAdding) {
-            mEntries.reserve(mSize);
             mEntries.push_back({std::move(mKeyHeldForAdding), std::move(item)});
         } else {
             mKeyHeldForAdding = std::move(item);
