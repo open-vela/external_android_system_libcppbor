@@ -613,7 +613,7 @@ class Array : public Item {
      * all of the types you'd expect and doest the things you'd expect (integral values are addes as
      * Uint or Nint, std::string and char* are added as Tstr, bools are added as Bool, etc.).
      */
-    template <typename... Args, typename Enable>
+    template <typename... Args, typename Enable = void>
     Array(Args&&... args);
 
     /**
@@ -729,7 +729,7 @@ class Map : public Item {
      * to make Map::get() faster.  Any use of a method that might modify the map disables the
      * speedup.
      */
-    template <typename Key, typename Enable>
+    template <typename Key, typename Enable = void>
     const std::unique_ptr<Item>& get(Key key) const;
 
     // Note that use of non-const operator[] marks the map as not canonicalized.
