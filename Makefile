@@ -14,7 +14,12 @@
 # limitations under the License.
 #
 
-ifneq ($(CONFIG_ANDROID_LIBCPPBOR),)
-CONFIGURED_APPS += $(APPDIR)/external/android/system/libcppbor
-CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/android/system/libcppbor/include/cppbor
-endif
+include $(APPDIR)/Make.defs
+
+CXXEXT = .cpp
+
+CXXSRCS += cppbor.cpp
+CXXFLAGS += -Wno-shadow
+VPATH += :src
+
+include $(APPDIR)/Application.mk
