@@ -273,17 +273,17 @@ uint8_t* encodeHeader(MajorType type, uint64_t addlInfo, uint8_t* pos, const uin
             *pos++ = type | static_cast<uint8_t>(addlInfo);
             return pos;
         case 2:
-            *pos++ = type | ONE_BYTE_LENGTH;
+            *pos++ = type | static_cast<MajorType>(ONE_BYTE_LENGTH);
             *pos++ = static_cast<uint8_t>(addlInfo);
             return pos;
         case 3:
-            *pos++ = type | TWO_BYTE_LENGTH;
+            *pos++ = type | static_cast<MajorType>(TWO_BYTE_LENGTH);
             return writeBigEndian(static_cast<uint16_t>(addlInfo), pos);
         case 5:
-            *pos++ = type | FOUR_BYTE_LENGTH;
+            *pos++ = type | static_cast<MajorType>(FOUR_BYTE_LENGTH);
             return writeBigEndian(static_cast<uint32_t>(addlInfo), pos);
         case 9:
-            *pos++ = type | EIGHT_BYTE_LENGTH;
+            *pos++ = type | static_cast<MajorType>(EIGHT_BYTE_LENGTH);
             return writeBigEndian(addlInfo, pos);
         default:
             CHECK(false);  // Impossible to get here.
@@ -298,19 +298,19 @@ void encodeHeader(MajorType type, uint64_t addlInfo, EncodeCallback encodeCallba
             encodeCallback(type | static_cast<uint8_t>(addlInfo));
             break;
         case 2:
-            encodeCallback(type | ONE_BYTE_LENGTH);
+            encodeCallback(type | static_cast<MajorType>(ONE_BYTE_LENGTH));
             encodeCallback(static_cast<uint8_t>(addlInfo));
             break;
         case 3:
-            encodeCallback(type | TWO_BYTE_LENGTH);
+            encodeCallback(type | static_cast<MajorType>(TWO_BYTE_LENGTH));
             writeBigEndian(static_cast<uint16_t>(addlInfo), encodeCallback);
             break;
         case 5:
-            encodeCallback(type | FOUR_BYTE_LENGTH);
+            encodeCallback(type | static_cast<MajorType>(FOUR_BYTE_LENGTH));
             writeBigEndian(static_cast<uint32_t>(addlInfo), encodeCallback);
             break;
         case 9:
-            encodeCallback(type | EIGHT_BYTE_LENGTH);
+            encodeCallback(type | static_cast<MajorType>(EIGHT_BYTE_LENGTH));
             writeBigEndian(addlInfo, encodeCallback);
             break;
         default:
