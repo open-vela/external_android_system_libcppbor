@@ -21,5 +21,6 @@ CXXEXT = .cpp
 CXXSRCS += cppbor.cpp
 CXXFLAGS += -Wno-shadow
 VPATH += :src
+DEPPATH += --dep-path src
 
 include $(APPDIR)/Application.mk
